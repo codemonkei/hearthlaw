@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BookOpen,
   Eye,
@@ -100,7 +100,7 @@ function TopBar() {
     { icon: <Utensils className="size-4 text-ember" />, label: "Meals", value: sim.resources.meals },
   ];
   return (
-    <header className="pointer-events-none flex flex-wrap items-stretch justify-center gap-2 px-2 pt-2 sm:px-3 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:px-64 [&>*]:pointer-events-auto">
+    <header data-topbar className="pointer-events-none flex flex-wrap items-stretch justify-center gap-2 px-2 pt-2 sm:px-3 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:px-64 [&>*]:pointer-events-auto">
       <div className="hl-panel flex items-center gap-3 px-3 py-2">
         <div>
           <div className="hl-display text-lg leading-none">Hearthlaw</div>
@@ -478,12 +478,48 @@ function TimeButton({
   );
 }
 
+/**
+ * On large screens the top bar floats over the play area. An overlay that would sit
+ * under its cards drops just below them; one with clear space beside them stays at the top.
+ * Returns the `top` in px to apply, or undefined to keep the element's own.
+ */
+function useClearOfTopBar(ref: RefObject<HTMLElement | null>): number | undefined {
+  const [top, setTop] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const bar = document.querySelector<HTMLElement>("[data-topbar]");
+    if (!el || !bar) return;
+    const check = () => {
+      // Below lg the bar takes its own row, so overlays already start beneath it.
+      if (!window.matchMedia("(min-width: 1024px)").matches) return setTop(undefined);
+      const box = el.getBoundingClientRect();
+      const cards = [...bar.children].map((c) => c.getBoundingClientRect()).filter((c) => c.width > 0);
+      const gap = 8;
+      const hits = cards.filter((c) => c.right + gap > box.left && c.left - gap < box.right);
+      if (hits.length === 0) return setTop(undefined);
+      const parentTop = (el.offsetParent as HTMLElement | null)?.getBoundingClientRect().top ?? 0;
+      setTop(Math.max(...hits.map((c) => c.bottom)) + gap - parentTop);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(bar);
+    ro.observe(document.body);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return top;
+}
+
 function Notice({ text }: { text: string }) {
   const dismiss = useGame((s) => s.dismissNotice);
+  const ref = useRef<HTMLButtonElement>(null);
+  const top = useClearOfTopBar(ref);
   return (
     <button
+      ref={ref}
       type="button"
-      className="pointer-events-auto absolute top-2 left-1/2 z-20 max-w-sm -translate-x-1/2 lg:top-28 hl-panel px-3 py-2 text-left text-sm"
+      className="pointer-events-auto absolute top-2 left-1/2 z-20 max-w-sm -translate-x-1/2 hl-panel px-3 py-2 text-left text-sm"
+      style={{ top }}
       onClick={dismiss}
     >
       {text}
@@ -493,8 +529,14 @@ function Notice({ text }: { text: string }) {
 
 function Sheet({ title, kicker, children }: { title: string; kicker: string; children: ReactNode }) {
   const setPanel = useGame((s) => s.setPanel);
+  const ref = useRef<HTMLElement>(null);
+  const top = useClearOfTopBar(ref);
   return (
-    <section className="pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto md:w-96 lg:top-28">
+    <section
+      ref={ref}
+      className="pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto md:w-96"
+      style={{ top }}
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="hl-kicker">{kicker}</p>
