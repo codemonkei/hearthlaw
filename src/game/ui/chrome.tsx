@@ -291,9 +291,12 @@ function SideButtons() {
       <Btn label="Chronicle" onClick={() => setPanel("chronicle")}>
         <Users className="size-5" />
       </Btn>
-      <Btn label="Heat overlay" onClick={toggleHeat} active={heat}>
-        <Eye className="size-5" />
-      </Btn>
+      {/* On phones the heat overlay lives on the left rail with the other map tools. */}
+      <div className="hidden lg:contents">
+        <Btn label="Heat overlay" onClick={toggleHeat} active={heat}>
+          <Eye className="size-5" />
+        </Btn>
+      </div>
       <Btn label={`Graphics: ${FX_LABEL[fx]} (G)`} onClick={toggleFx}>
         <span className="relative">
           <Sparkles className="size-5" />
@@ -452,6 +455,8 @@ function MobileKiln() {
   const cell = "flex h-9 w-12 items-center justify-center rounded-lg text-sm";
   const dockOpen = useGame((s) => s.dockOpen);
   const toggleDock = useGame((s) => s.toggleDock);
+  const heat = useGame((s) => s.heat);
+  const toggleHeat = useGame((s) => s.toggleHeat);
   const railBtn = (active: boolean) =>
     `relative flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line ${active ? "bg-ember text-ink" : "bg-panel text-snow"}`;
   return (
@@ -464,6 +469,15 @@ function MobileKiln() {
         onClick={toggleDock}
       >
         <HousePlus className="size-5" />
+      </button>
+      <button
+        type="button"
+        aria-pressed={heat}
+        aria-label="Heat overlay"
+        className={railBtn(heat)}
+        onClick={toggleHeat}
+      >
+        <Eye className="size-5" />
       </button>
       <button
         type="button"
