@@ -110,7 +110,27 @@ function TopBar() {
   ];
   return (
     <header data-topbar className="pointer-events-none flex flex-wrap items-stretch justify-center gap-2 px-2 pt-2 sm:px-3 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:px-64 [&>*]:pointer-events-auto">
-      <div className="hl-panel flex items-center gap-3 px-3 py-2">
+      {/* Phones and tablets: name, clock and temperature share one strip with the stores. */}
+      <div className="hl-panel flex w-full max-w-xl items-center gap-2 px-2 py-1.5 lg:hidden">
+        <div className="shrink-0">
+          <div className="hl-display text-sm leading-none">Hearthlaw</div>
+          <div className="mt-0.5 text-[0.65rem] leading-none whitespace-nowrap text-mist">{formatClock(sim.minute)}</div>
+        </div>
+        <div className={`shrink-0 text-right ${temp <= -50 ? "text-mist" : "text-snow"}`}>
+          <div className="hl-display text-lg leading-none">{temp}°</div>
+          <div className="mt-0.5 text-[0.6rem] leading-none text-ember">{hush ? "Hush" : "Cirque"}</div>
+        </div>
+        <div aria-hidden className="h-9 w-px shrink-0 bg-line" />
+        <div className="flex min-w-0 flex-1 justify-between gap-0.5 overflow-x-auto">
+          {items.map((item) => (
+            <div key={item.label} title={item.label} aria-label={`${item.label} ${item.value}`} className="flex min-w-8 flex-col items-center">
+              {item.icon}
+              <span className="hl-display text-sm leading-tight">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="hl-panel hidden items-center gap-3 px-3 py-2 lg:flex">
         <div>
           <div className="hl-display text-lg leading-none">Hearthlaw</div>
           <div className="text-xs text-mist">{formatClock(sim.minute)}</div>
@@ -120,12 +140,12 @@ function TopBar() {
           <div className="text-xs text-ember">{hush ? "The Hush" : "Cirque"}</div>
         </div>
       </div>
-      <div className="hl-panel flex min-w-0 max-w-full items-center gap-2 overflow-x-auto px-3 py-2 max-md:order-first">
+      <div className="hl-panel hidden min-w-0 max-w-full items-center gap-2 overflow-x-auto px-3 py-2 lg:flex">
         {items.map((item) => (
-          <div key={item.label} title={item.label} aria-label={`${item.label} ${item.value}`} className="flex min-w-10 flex-col items-center px-1 lg:min-w-14">
+          <div key={item.label} className="flex min-w-14 flex-col items-center px-1">
             {item.icon}
             <span className="hl-display text-base leading-tight">{item.value}</span>
-            <span className="hidden text-[0.65rem] tracking-wide text-mist uppercase lg:block">{item.label}</span>
+            <span className="text-[0.65rem] tracking-wide text-mist uppercase">{item.label}</span>
           </div>
         ))}
       </div>
