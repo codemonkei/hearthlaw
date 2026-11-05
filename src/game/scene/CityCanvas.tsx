@@ -16,7 +16,7 @@ import {
   type PlacementFit,
   type TileFit,
 } from "@/game/sim/engine";
-import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
+import { HEX_SIZE, PIT_EDGE, RIM_HEIGHT, hexToWorld, pitFunnelY } from "@/game/sim/hex";
 import type { BuildingKind, Deposit, SimState, Terrain } from "@/game/sim/types";
 
 /** Tile tops from hexToWorld; the lowest hexes sit level with this plane. */
@@ -505,6 +505,47 @@ function skyClock() {
   return { hour: minute / 60, tempC: outdoorTemp(sim.minute) };
 }
 
+/** Where tile columns end: just under the ground, or under the bottom of a pit. */
+function columnBottom(terrain: Terrain): number {
+  return terrain === "pit" ? -RIM_HEIGHT - 0.6 : GROUND_Y - COLUMN_SINK;
+}
+
+const GROUND_COLOR = "#9eacb8";
+
+/**
+ * Snowfield around the cirque. A pit cuts a round hole into it and lines the hole with a
+ * funnel that slopes down under the tiles, so the sunken map reads as dug into the ground.
+ */
+function Ground({ pit }: { pit: boolean }) {
+  const funnel = useMemo(() => {
+    const pts: THREE.Vector2[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const r = (i / 24) * PIT_EDGE;
+      pts.push(new THREE.Vector2(r, pitFunnelY(r) + GROUND_Y));
+    }
+    return new THREE.LatheGeometry(pts, 48);
+  }, []);
+  if (!pit) {
+    return (
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, GROUND_Y, 0]} receiveShadow>
+        <circleGeometry args={[90, 64]} />
+        <meshStandardMaterial color={GROUND_COLOR} roughness={1} />
+      </mesh>
+    );
+  }
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, GROUND_Y, 0]} receiveShadow>
+        <ringGeometry args={[PIT_EDGE, 90, 64, 1]} />
+        <meshStandardMaterial color={GROUND_COLOR} roughness={1} />
+      </mesh>
+      <mesh geometry={funnel} receiveShadow>
+        <meshStandardMaterial color="#8f9dab" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
 function City() {
   const rev = useGame((s) => s.rev);
   const heat = useGame((s) => s.heat);
@@ -533,20 +574,17 @@ function City() {
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, GROUND_Y, 0]} receiveShadow>
-        <circleGeometry args={[90, 64]} />
-        <meshStandardMaterial color="#9eacb8" roughness={1} />
-      </mesh>
+      <Ground pit={sim.terrain === "pit"} />
       <Nature sim={sim} fallback={<SimpleNature sim={sim} />} tileProps={!kenney} />
       {kenney && <KenneyTiles sim={sim} />}
       {sim.tiles.map((tile) => {
         const [x, top, z] = hexToWorld(tile.q, tile.r, sim.terrain);
         // Group origin stays at the old slab centre so structure offsets are unchanged.
         const y = top - SLAB_HALF;
-        // Solid column from the tile top down past the ground, so nothing floats.
+        // Solid column from the tile top down past the ground (or the pit floor), so nothing floats.
         // With the Kenney kit the column stops just under the kit tile, which supplies the top.
         const sunk = kenney ? 0.06 : 0;
-        const column = top - sunk - GROUND_Y + COLUMN_SINK;
+        const column = top - sunk - columnBottom(sim.terrain);
         const key = `${tile.q}:${tile.r}`;
         const isKiln = tile.q === 0 && tile.r === 0;
         const src = sourceAt(sim, tile.q, tile.r);

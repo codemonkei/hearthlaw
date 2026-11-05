@@ -27,18 +27,31 @@ function planar(q: number, r: number): [number, number] {
   return [HEX_SIZE * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r), HEX_SIZE * (3 / 2) * r];
 }
 
-/** Height of the outermost hex (the ring's corners) above the centre in a pit. */
-const RIM_HEIGHT = Math.max(...hexRange(MAP_RADIUS).map(({ q, r }) => bowl(Math.hypot(...planar(q, r)))));
+/** Height difference between the centre hex and the outermost hexes (the ring's corners). */
+export const RIM_HEIGHT = Math.max(...hexRange(MAP_RADIUS).map(({ q, r }) => bowl(Math.hypot(...planar(q, r)))));
+
+/** Radius of the hole a pit cuts into the ground: just past the outermost tile corners. */
+export const PIT_EDGE = 9.6;
 
 /**
- * Pointy-top axial → world. Y is the top of the tile above the ground (0).
- * Pit: centre is level with the ground and the rim rises. Hill: the rim's
- * lowest hexes are level with the ground and the centre is the summit.
+ * Surface of the pit's funnel at distance `r` from the centre: level with the ground at
+ * PIT_EDGE and always a little below the tile tops, so it fills the gaps around the jagged
+ * hex edge without showing through the tiles.
+ */
+export function pitFunnelY(r: number): number {
+  return bowl(Math.min(r, PIT_EDGE)) - bowl(PIT_EDGE) - 0.02;
+}
+
+/**
+ * Pointy-top axial → world. Y is the top of the tile relative to the ground (0).
+ * Pit: sunk into the ground — the outermost hexes are level with it and the centre lies
+ * RIM_HEIGHT below. Hill: the outermost hexes are level with the ground and the centre
+ * is the summit.
  */
 export function hexToWorld(q: number, r: number, terrain: Terrain = "pit"): [number, number, number] {
   const [x, z] = planar(q, r);
   const b = bowl(Math.hypot(x, z));
-  const y = terrain === "pit" ? b : RIM_HEIGHT - b;
+  const y = terrain === "pit" ? b - RIM_HEIGHT : RIM_HEIGHT - b;
   return [x, y, z];
 }
 
