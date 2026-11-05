@@ -839,9 +839,11 @@ function InspectCard() {
             Raise to {BUILDINGS[next].name}
           </button>
         )}
-        <button type="button" className="min-h-11 rounded-lg bg-panel-2 px-3 text-sm" onClick={() => doHeater(b.id)}>
-          {b.heater ? "Heater on" : "Fit heater"}
-        </button>
+        {(b.kind !== "vent" || b.heater) && (
+          <button type="button" className="min-h-11 rounded-lg bg-panel-2 px-3 text-sm" onClick={() => doHeater(b.id)}>
+            {b.heater ? "Heater on" : "Fit heater"}
+          </button>
+        )}
         <button type="button" className="min-h-11 rounded-lg bg-panel-2 px-3 text-sm" onClick={() => doDemolish(b.id)}>
           Take down
         </button>

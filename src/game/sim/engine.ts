@@ -519,6 +519,9 @@ export function toggleHeater(sim: SimState, id: number): { ok: boolean; reason?:
   if (BUILDINGS[b.kind].housing > 0 && b.kind === "tent") {
     return { ok: false, reason: "Canvas will not hold a heater. Raise a hut first." };
   }
+  if (b.kind === "vent" && !b.heater) {
+    return { ok: false, reason: "A relay vent is already the heat. It takes no heater." };
+  }
   if (!sim.testMode && !sim.research.unlocked.includes("heaters")) {
     return { ok: false, reason: "The Survey Hall has not fitted heaters yet." };
   }

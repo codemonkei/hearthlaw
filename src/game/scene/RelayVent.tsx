@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { C, FLAT, FACING, HOT, SELECTED, TILE_TOP, toTile } from "@/game/scene/parts";
 
 /*
- * The relay vent: the Kiln's heat carried one ring outward. A copper duct comes up out of the
- * ground into an octagonal stone plinth; above it an iron column ringed with radiator fins and
+ * The relay vent: the Kiln's heat carried one ring outward. A copper duct rises out of the
+ * ground and elbows into an octagonal stone plinth; above it an iron column ringed with radiator fins and
  * capped with a copper cowl. When the Kiln burns, the fins glow dull red, the grille under the
  * cowl glows hot and it breathes smoke; the snow around it has melted to dark wet ground.
  */
@@ -30,17 +30,27 @@ export function RelayVent({ active, selected }: { active: boolean; selected: boo
         <meshStandardMaterial color="#5d666e" roughness={0.35} metalness={0.1} {...FLAT} />
       </mesh>
 
-      {/* Copper duct coming up out of the ground from the Kiln's side. */}
-      <mesh position={[0, 0.035, -0.45]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.045, 0.045, 0.6, 8]} />
+      {/* Copper duct: out of the back of the plinth, bending straight down into the ground. */}
+      <mesh position={[0, 0.07, -0.25]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.045, 0.045, 0.1, 8]} />
         <meshStandardMaterial color={COPPER_DARK} metalness={0.5} roughness={0.5} {...FLAT} />
       </mesh>
-      {[-0.65, -0.42, -0.22].map((z) => (
-        <mesh key={z} position={[0, 0.035, z]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.056, 0.056, 0.02, 8]} />
-          <meshStandardMaterial color={C.iron} metalness={0.5} roughness={0.5} {...FLAT} />
-        </mesh>
-      ))}
+      <mesh position={[0, 0.07, -0.3]}>
+        <sphereGeometry args={[0.047, 8, 6]} />
+        <meshStandardMaterial color={COPPER_DARK} metalness={0.5} roughness={0.5} {...FLAT} />
+      </mesh>
+      <mesh position={[0, 0.02, -0.3]} castShadow>
+        <cylinderGeometry args={[0.045, 0.045, 0.1, 8]} />
+        <meshStandardMaterial color={COPPER_DARK} metalness={0.5} roughness={0.5} {...FLAT} />
+      </mesh>
+      <mesh position={[0, 0.005, -0.3]}>
+        <cylinderGeometry args={[0.07, 0.075, 0.015, 8]} />
+        <meshStandardMaterial color={C.iron} metalness={0.5} roughness={0.5} {...FLAT} />
+      </mesh>
+      <mesh position={[0, 0.07, -0.215]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.056, 0.056, 0.02, 8]} />
+        <meshStandardMaterial color={C.iron} metalness={0.5} roughness={0.5} {...FLAT} />
+      </mesh>
 
       {/* Octagonal stone plinth. */}
       <mesh position={[0, 0.06, 0]} castShadow receiveShadow>
