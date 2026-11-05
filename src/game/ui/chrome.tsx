@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   Eye,
   FastForward,
   Flame,
@@ -79,6 +81,7 @@ export function PlayChrome() {
         <div className="relative min-w-0 flex-1">
           {notice && <Notice text={notice} />}
           <SideButtons />
+          <MobileKiln />
           {useGame.getState().panel === "charter" && <CharterBook />}
           {useGame.getState().panel === "survey" && <SurveyBook />}
           {useGame.getState().panel === "chronicle" && <ChronicleBook />}
@@ -362,9 +365,6 @@ function Dock() {
           <DockButton key={kind} kind={kind} active={buildKind === kind} timber={sim.resources.timber} iron={sim.resources.iron} onClick={() => chooseBuild(kind)} />
         ))}
       </div>
-      <div className="mb-1 flex gap-1 overflow-x-auto lg:hidden">
-        <MobileKiln />
-      </div>
     </div>
   );
 }
@@ -401,42 +401,101 @@ function DockButton({
   );
 }
 
+const KILN_OPEN_KEY = "hearthlaw.kilnRail";
+
+/** Phones and tablets: the Kiln's controls as a rail on the left, folded to one button when not in use. */
 function MobileKiln() {
   const sim = useGame.getState().sim!;
   const doPressure = useGame((s) => s.doPressure);
   const doRadius = useGame((s) => s.doRadius);
   const doSurge = useGame((s) => s.doSurge);
+  const [open, setOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(KILN_OPEN_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      window.localStorage.setItem(KILN_OPEN_KEY, next ? "1" : "0");
+    } catch {
+      /* the choice lasts this session */
+    }
+  };
   const cap = maxRadius(sim);
+  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
+  const lit = sim.kiln.running && sim.kiln.pressure > 0;
+  const cell = "flex h-9 w-12 items-center justify-center rounded-lg text-sm";
   return (
-    <div className="flex items-center gap-1 hl-panel p-1">
-      {([1, 2, 3, 4] as const).map((n) => (
-        <button
-          key={n}
-          type="button"
-          disabled={n > cap}
-          className={`min-h-11 min-w-10 rounded-lg text-sm disabled:opacity-30 ${sim.kiln.radius === n ? "bg-copper text-snow" : "text-snow"}`}
-          onClick={() => doRadius(n)}
-        >
-          R{n}
-        </button>
-      ))}
-      {([0, 1, 2, 3, 4] as const).map((n) => (
-        <button
-          key={`p${n}`}
-          type="button"
-          className={`min-h-11 min-w-10 rounded-lg text-sm ${sim.kiln.pressure === n ? "bg-ember text-ink" : "text-snow"}`}
-          onClick={() => doPressure(n)}
-        >
-          {n}
-        </button>
-      ))}
+    <div className="pointer-events-auto absolute top-2 left-2 flex flex-col items-start gap-2 lg:hidden">
       <button
         type="button"
-        className={`min-h-11 rounded-lg px-3 text-sm ${sim.kiln.surge ? "bg-blood" : "bg-panel-2"}`}
-        onClick={() => doSurge()}
+        aria-expanded={open}
+        aria-label={open ? "Fold the Kiln controls" : "Open the Kiln controls"}
+        className={`flex min-h-11 items-center gap-1.5 rounded-xl border border-line px-2.5 ${open ? "bg-panel-2" : "bg-panel"} text-snow`}
+        onClick={toggle}
       >
-        Surge
+        <Flame className={`size-5 ${lit ? "text-ember" : "text-mist"}`} />
+        <span className="text-xs tabular-nums">
+          P{sim.kiln.pressure} · R{sim.kiln.radius}
+          <span className="text-mist"> · {lit ? `${burn}/h` : "dark"}</span>
+        </span>
+        {open ? <ChevronUp className="size-4 text-mist" /> : <ChevronDown className="size-4 text-mist" />}
       </button>
+      {open && (
+        <div className="flex flex-col gap-1.5 hl-panel p-1.5">
+          <div className="flex gap-1">
+            <div role="group" aria-label="Pressure" className="flex flex-col gap-1">
+              {([4, 3, 2, 1, 0] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-label={`Pressure ${n}`}
+                  aria-pressed={sim.kiln.pressure === n}
+                  className={`${cell} ${sim.kiln.pressure === n ? "bg-ember text-ink" : "bg-panel-2 text-snow"}`}
+                  onClick={() => doPressure(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div role="group" aria-label="Radius" className="flex flex-col gap-1">
+              {([4, 3, 2, 1] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-label={`Radius ${n}`}
+                  aria-pressed={sim.kiln.radius === n}
+                  disabled={n > cap}
+                  className={`${cell} disabled:opacity-30 ${sim.kiln.radius === n ? "bg-copper text-snow" : "bg-panel-2 text-snow"}`}
+                  onClick={() => doRadius(n)}
+                >
+                  R{n}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-label={sim.kiln.surge ? "Close the surge" : "Open the surge"}
+                aria-pressed={sim.kiln.surge}
+                className={`${cell} text-xs ${sim.kiln.surge ? "bg-blood text-snow" : "bg-panel-2 text-snow"}`}
+                onClick={() => doSurge()}
+              >
+                Surge
+              </button>
+            </div>
+          </div>
+          {sim.kiln.strain > 0 && (
+            <div className="px-0.5" aria-label={`Strain ${Math.round(sim.kiln.strain / 10)}%`}>
+              <div className="bar-track">
+                <div className="bar-fill bg-blood" style={{ width: `${sim.kiln.strain / 10}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
