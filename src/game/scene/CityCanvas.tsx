@@ -33,7 +33,6 @@ import {
   SceneLighting,
   Smoke,
   Snowfall,
-  WINDOW_MATERIALS,
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
@@ -47,6 +46,11 @@ import { TrappersHut, trappersFlue, trappersHeaterFlue } from "@/game/scene/Trap
 import { PeatCutter, peatFlue, peatHeaterFlue } from "@/game/scene/PeatCutter";
 import { WoodLodge, woodFlue, woodHeaterFlue } from "@/game/scene/WoodLodge";
 import { SalvagePost, salvageFlue, salvageHeaterFlue } from "@/game/scene/SalvagePost";
+import { Ironworks, ironworksFlue, ironworksHeaterFlue } from "@/game/scene/Ironworks";
+import { Infirmary, infirmaryFlue, infirmaryHeaterFlue } from "@/game/scene/Infirmary";
+import { SurveyHall, surveyFlue, surveyHeaterFlue } from "@/game/scene/SurveyHall";
+import { Depot, depotHeaterFlue } from "@/game/scene/Depot";
+import { RelayVent, ventFlue } from "@/game/scene/RelayVent";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
 const _fwd = new THREE.Vector3();
@@ -141,15 +145,6 @@ function CameraRig() {
   );
 }
 
-/** A lit window: bright amber when the room is warm, a dull ember when it is not. */
-function Window({ position, warmth }: { position: [number, number, number]; warmth: number }) {
-  return (
-    <mesh position={position} material={warmth >= 1 ? WINDOW_MATERIALS.warm : warmth >= 0 ? WINDOW_MATERIALS.mild : WINDOW_MATERIALS.cold}>
-      <boxGeometry args={[0.15, 0.12, 0.02]} />
-    </mesh>
-  );
-}
-
 type Flue = { at: [number, number, number]; strength: number };
 
 /** Where a lit heater's stovepipe smokes, for the buildings that draw one. */
@@ -161,11 +156,15 @@ const HEATER_FLUES: Partial<Record<BuildingKind, () => [number, number, number]>
   peat: peatHeaterFlue,
   wood: woodHeaterFlue,
   salvage: salvageHeaterFlue,
+  ironworks: ironworksHeaterFlue,
+  infirmary: infirmaryHeaterFlue,
+  survey: surveyHeaterFlue,
+  depot: depotHeaterFlue,
 };
 
 /** Where each building's chimney mouths sit, relative to its tile group, and how thick their smoke is. */
-function chimneys(kind: BuildingKind): Flue[] {
-  if (kind === "vent") return [];
+function chimneys(kind: BuildingKind, kilnRunning: boolean): Flue[] {
+  if (kind === "vent") return kilnRunning ? [{ at: ventFlue(), strength: 0.4 }] : [];
   if (kind === "tent") return [{ at: tentFlue(), strength: 0.75 }];
   if (kind === "hut") return [{ at: hutFlue(), strength: 0.8 }];
   if (kind === "longhouse") {
@@ -180,9 +179,10 @@ function chimneys(kind: BuildingKind): Flue[] {
   if (kind === "peat") return [{ at: peatFlue(), strength: 0.35 }];
   if (kind === "wood") return [{ at: woodFlue(), strength: 0.75 }];
   if (kind === "salvage") return [{ at: salvageFlue(), strength: 0.45 }];
-  const tall = kind === "survey" || kind === "infirmary";
-  const strength = kind === "ironworks" ? 1 : tall ? 0.6 : 0.35;
-  return [{ at: [0.22, tall ? 1.32 : 0.97, 0], strength }];
+  if (kind === "ironworks") return [{ at: ironworksFlue(), strength: 1 }];
+  if (kind === "infirmary") return [{ at: infirmaryFlue(), strength: 0.6 }];
+  if (kind === "survey") return [{ at: surveyFlue(), strength: 0.6 }];
+  return []; // the depot is unheated
 }
 
 function Structure({
@@ -190,13 +190,14 @@ function Structure({
   warmth,
   selected,
   heater = "none",
+  kilnRunning = false,
 }: {
   kind: BuildingKind;
   warmth: number;
   selected: boolean;
   heater?: HeaterState;
+  kilnRunning?: boolean;
 }) {
-  const stone = "#3b4a5c";
   if (kind === "tent") return <CanvasTent warmth={warmth} selected={selected} />;
   if (kind === "hut") return <TimberHut warmth={warmth} selected={selected} heater={heater} />;
   if (kind === "longhouse") return <Longhouse warmth={warmth} selected={selected} heater={heater} />;
@@ -205,36 +206,11 @@ function Structure({
   if (kind === "peat") return <PeatCutter selected={selected} heater={heater} />;
   if (kind === "wood") return <WoodLodge warmth={warmth} selected={selected} heater={heater} />;
   if (kind === "salvage") return <SalvagePost selected={selected} heater={heater} />;
-  if (kind === "vent") {
-    return (
-      <group>
-        <mesh position={[0, 0.45, 0]} castShadow>
-          <cylinderGeometry args={[0.16, 0.22, 0.9, 8]} />
-          <meshStandardMaterial color="#c8642b" metalness={0.6} roughness={0.35} />
-        </mesh>
-        <mesh position={[0, 0.95, 0]}>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshStandardMaterial color="#f2a541" emissive="#ffb15c" emissiveIntensity={2.6} />
-        </mesh>
-      </group>
-    );
-  }
-  const tall = kind === "survey" || kind === "infirmary";
-  return (
-    <group>
-      <mesh position={[0, 0.36, 0]} castShadow>
-        <boxGeometry args={[0.85, 0.55, 0.7]} />
-        <meshStandardMaterial color={stone} roughness={0.75} />
-      </mesh>
-      <mesh position={[0.22, tall ? 0.95 : 0.75, 0]} castShadow>
-        <boxGeometry args={[0.12, tall ? 0.7 : 0.4, 0.12]} />
-        <meshStandardMaterial color="#2c3338" />
-      </mesh>
-      {(kind === "infirmary" || kind === "survey" || kind === "ironworks") && (
-        <Window position={[-0.18, 0.38, 0.355]} warmth={warmth} />
-      )}
-    </group>
-  );
+  if (kind === "ironworks") return <Ironworks selected={selected} heater={heater} />;
+  if (kind === "infirmary") return <Infirmary warmth={warmth} selected={selected} heater={heater} />;
+  if (kind === "survey") return <SurveyHall warmth={warmth} selected={selected} heater={heater} />;
+  if (kind === "depot") return <Depot selected={selected} heater={heater} />;
+  return <RelayVent active={kilnRunning} selected={selected} />;
 }
 
 const DEPOSIT_TILE: Record<Exclude<Deposit, "none">, string> = {
@@ -525,7 +501,7 @@ function City() {
         const heaterLit = Boolean(building?.heater && building.heaterFed);
         const heaterFlue = heaterLit && building ? HEATER_FLUES[building.kind]?.() ?? null : null;
         if (heaterFlue) smoke.push({ pos: [x + heaterFlue[0], y + heaterFlue[1], z + heaterFlue[2]], strength: 0.5 });
-        for (const flue of building ? chimneys(building.kind) : []) {
+        for (const flue of building ? chimneys(building.kind, sim.kiln.running) : []) {
           smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
         }
         let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
@@ -579,6 +555,7 @@ function City() {
                 warmth={buildingWarmth(sim, building)}
                 selected={building.id === selectedId}
                 heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
+                kilnRunning={sim.kiln.running}
               />
             )}
             {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (

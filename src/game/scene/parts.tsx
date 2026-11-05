@@ -378,3 +378,79 @@ export function Embers({ position, size = 1 }: { position: [number, number, numb
     </group>
   );
 }
+
+/** Vertical battens across a wall face of the given width and height, facing +z, from y = 0. */
+export function Battens({ width, height, color = C.plankDark, spacing = 0.09 }: { width: number; height: number; color?: string; spacing?: number }) {
+  const n = Math.max(1, Math.round(width / spacing));
+  return (
+    <>
+      {Array.from({ length: n + 1 }, (_, i) => (
+        <mesh key={i} position={[-width / 2 + (i / n) * width, height / 2, 0]}>
+          <boxGeometry args={[0.018, height, 0.012]} />
+          <meshStandardMaterial color={color} roughness={1} {...FLAT} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+/** A round pole from point `a` to point `b`. */
+export function Pole({ a, b, r = 0.016, color = C.logDark }: { a: [number, number, number]; b: [number, number, number]; r?: number; color?: string }) {
+  const va = new THREE.Vector3(...a);
+  const vb = new THREE.Vector3(...b);
+  const dir = vb.clone().sub(va);
+  const q = new THREE.Quaternion().setFromUnitVectors(UP, dir.clone().normalize());
+  return (
+    <mesh position={va.add(vb).multiplyScalar(0.5)} quaternion={q} castShadow>
+      <cylinderGeometry args={[r, r, dir.length(), 6]} />
+      <meshStandardMaterial color={color} roughness={1} {...FLAT} />
+    </mesh>
+  );
+}
+
+/** A plank crate with darker edge boards, standing on y = 0. */
+export function Crate({ position, size = 0.12, rotationY = 0, snow = false }: { position: [number, number, number]; size?: number; rotationY?: number; snow?: boolean }) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh position={[0, size / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[size, size, size]} />
+        <meshStandardMaterial color={C.logEnd} roughness={1} {...FLAT} />
+      </mesh>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[0, size / 2, s * (size / 2 + 0.002)]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[size * 1.25, 0.014, 0.006]} />
+          <meshStandardMaterial color={C.plank} roughness={1} {...FLAT} />
+        </mesh>
+      ))}
+      {snow && (
+        <mesh position={[0, size + 0.008, 0]} scale={[1.3, 0.4, 1.2]}>
+          <icosahedronGeometry args={[size * 0.4, 1]} />
+          <meshStandardMaterial color={SNOW_COLOR} roughness={0.9} {...FLAT} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/** A warm-lit lantern hanging from a short iron arm (arm runs along +x from the mount point). */
+const LANTERN_GLOW = new THREE.MeshStandardMaterial({ color: "#3a2410", emissive: "#ffb35a", emissiveIntensity: 2.2, ...FLAT });
+export function Lantern({ position, rotationY = 0 }: { position: [number, number, number]; rotationY?: number }) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh position={[0.04, 0, 0]}>
+        <boxGeometry args={[0.08, 0.012, 0.012]} />
+        <meshStandardMaterial color={C.iron} {...FLAT} />
+      </mesh>
+      <mesh position={[0.07, -0.045, 0]} material={LANTERN_GLOW}>
+        <boxGeometry args={[0.035, 0.045, 0.035]} />
+      </mesh>
+      <mesh position={[0.07, -0.012, 0]}>
+        <coneGeometry args={[0.03, 0.025, 4]} />
+        <meshStandardMaterial color={C.iron} {...FLAT} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Glowing hot metal: furnace mouths, fresh castings, vent grilles. */
+export const HOT = new THREE.MeshStandardMaterial({ color: "#3a1205", emissive: "#ff6a1e", emissiveIntensity: 2.8, ...FLAT });
