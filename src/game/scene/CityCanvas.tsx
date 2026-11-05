@@ -37,6 +37,7 @@ import {
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
+import { CanvasTent, tentFlue } from "@/game/scene/Tent";
 import { Kiln, kilnStackTop } from "@/game/scene/Kiln";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
@@ -141,7 +142,8 @@ function Window({ position, warmth }: { position: [number, number, number]; warm
 
 /** Where each building's chimney mouth sits, relative to its tile group, and how thick its smoke is. */
 function chimney(kind: BuildingKind): { at: [number, number, number]; strength: number } | null {
-  if (kind === "tent" || kind === "vent") return null;
+  if (kind === "vent") return null;
+  if (kind === "tent") return { at: tentFlue(), strength: 0.3 };
   if (kind === "hut") return { at: [0.72 * 0.25, 0.95, 0], strength: 0.7 };
   if (kind === "longhouse") return { at: [1.15 * 0.25, 0.95, 0], strength: 0.9 };
   const tall = kind === "survey" || kind === "infirmary";
@@ -153,14 +155,7 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
   const roof = warmth >= 1 ? "#f2a541" : "#e8eef2";
   const timber = "#6b4632";
   const stone = "#3b4a5c";
-  if (kind === "tent") {
-    return (
-      <mesh position={[0, 0.38, 0]} castShadow>
-        <coneGeometry args={[0.55, 0.75, 6]} />
-        <meshStandardMaterial color={selected ? "#c8642b" : "#cbb892"} roughness={0.85} />
-      </mesh>
-    );
-  }
+  if (kind === "tent") return <CanvasTent warmth={warmth} selected={selected} />;
   if (kind === "hut" || kind === "longhouse") {
     const wide = kind === "longhouse" ? 1.15 : 0.72;
     return (
