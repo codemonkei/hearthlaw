@@ -77,7 +77,50 @@ function pipeGeometry(radius = 0.075) {
     new THREE.Vector3(DRUM_R + 0.25, GRATE_Y + 0.12, 0),
     new THREE.Vector3(DRUM_R + 0.26, TILE_TOP + 0.2, 0),
   ]);
-  return new THREE.TubeGeometry(path, 16, radius, 7, false);
+  const geo = new THREE.TubeGeometry(path, 16, radius, 7, false);
+  const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
+  const heat = new Float32Array(uv.count);
+  for (let i = 0; i < uv.count; i++) heat[i] = 1 - uv.getX(i);
+  geo.setAttribute("aHeat", new THREE.BufferAttribute(heat, 1));
+  return geo;
+}
+
+const RED_HOT_EMISSIVE = `#include <emissivemap_fragment>
+        {
+          float wave = 0.82 + 0.18 * sin(uTime * 2.0 - vHeat * 9.0);
+          vec3 dull = vec3(0.3, 0.008, 0.0);
+          vec3 cherry = vec3(0.85, 0.045, 0.008);
+          vec3 hot = mix(dull, cherry, clamp(vHeat * 0.6 + uGlow * 0.5, 0.0, 1.0));
+          totalEmissiveRadiance = hot * uGlow * (0.45 + 0.55 * vHeat) * wave * uStrength;
+        }`;
+
+/** Shared uniforms for the red-hot pipe shader: how hot (0..1), time, and overall strength. */
+const PIPE_HEAT = { uGlow: { value: 0 }, uTime: { value: 0 }, uStrength: { value: 1.6 } };
+
+/**
+ * Red-hot iron: the pipe glows cherry red where it leaves the drum and cools to a dull red
+ * toward the plinth, with slow heat waves running down it. The copper scorches dark beneath.
+ */
+function redHotPipe(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, PIPE_HEAT);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float aHeat;\nvarying float vHeat;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeat = aHeat;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uGlow;\nuniform float uTime;\nuniform float uStrength;\nvarying float vHeat;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.025, 0.015), uGlow * 0.85);`,
+      )
+      .replace(
+        "#include <emissivemap_fragment>",
+        RED_HOT_EMISSIVE,
+      );
+  };
+  // Keyed on the shader source so edits recompile instead of reusing a cached program.
+  m.customProgramCacheKey = () => `hearthlaw-red-hot-pipe:${RED_HOT_EMISSIVE.length}:${RED_HOT_EMISSIVE.slice(-120)}`;
 }
 
 /** A jagged crack: a few short emissive segments in a zigzag, flat against the drum. */
@@ -105,9 +148,13 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
       grate: new THREE.MeshStandardMaterial({ color: "#2a0d05", emissive: "#ff7a2a", emissiveIntensity: 2, ...FLAT }),
       mouth: new THREE.MeshStandardMaterial({ color: "#2a0d05", emissive: "#ffb15c", emissiveIntensity: 3, side: THREE.DoubleSide }),
       iron: new THREE.MeshStandardMaterial({ color: IRON, metalness: 0.5, roughness: 0.55, emissive: "#ff3a12", emissiveIntensity: 0, ...FLAT }),
-      copper: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff6a20", emissiveIntensity: 0, ...FLAT }),
-      /** Heat pipes: copper when cool; when hot they glow with the same fire as the grates. */
-      pipe: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff7a2a", emissiveIntensity: 0, ...FLAT }),
+      copper: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#c41a06", emissiveIntensity: 0, ...FLAT }),
+      /** Heat pipes: copper when cool, red-hot iron when the Kiln runs hard (see redHotPipe). */
+      pipe: (() => {
+        const m = new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, ...FLAT });
+        redHotPipe(m);
+        return m;
+      })(),
       snowLip: new THREE.MeshStandardMaterial({ color: SNOW, roughness: 0.9, ...FLAT }),
       frost: new THREE.MeshStandardMaterial({ color: FROST, roughness: 0.7, transparent: true, opacity: 0.85, ...FLAT }),
       crack: new THREE.MeshBasicMaterial({ color: new THREE.Color("#ff5a1f").multiplyScalar(3), toneMapped: false, transparent: true }),
@@ -156,7 +203,6 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
   const fire = useMemo(() => new THREE.Color("#ff7a2a"), []);
   const snowColor = useMemo(() => new THREE.Color(SNOW), []);
   const wetStone = useMemo(() => new THREE.Color("#6a7178"), []);
-  const ember = useMemo(() => new THREE.Color("#2a0d05"), []);
   const pipeCopper = useMemo(() => new THREE.Color(COPPER), []);
 
   mats.copper.color.set(age ? COPPER_OLD : COPPER);
@@ -181,12 +227,13 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
     const glow = feedback ? THREE.MathUtils.clamp((heat - 2.3) / 2.7, 0, 1) : 0;
     const pulse = 0.85 + breath * 0.15;
     mats.copper.emissiveIntensity = glow * 0.9 * pulse;
-    // The pipes take on the grates' own fire: same colour, same breathing and flicker,
-    // fading in with the heat while the copper darkens to an ember underneath.
-    mats.pipe.emissive.copy(mats.grate.emissive);
-    mats.pipe.emissiveIntensity = mats.grate.emissiveIntensity * glow;
-    mats.pipe.color.copy(pipeCopper).lerp(ember, glow);
-    mats.pipe.metalness = 0.6 * (1 - glow);
+    // Red-hot pipes: faint at pressure 2, clearly red at 3–4, hottest on surge.
+    const redHot = feedback ? THREE.MathUtils.clamp((heat - 2.0) / 2.6, 0, 1) : 0;
+    PIPE_HEAT.uGlow.value = redHot;
+    PIPE_HEAT.uTime.value = t;
+    PIPE_HEAT.uStrength.value = 1.25 + (surge ? 0.45 : 0) + flicker;
+    mats.pipe.color.copy(pipeCopper);
+    mats.pipe.metalness = 0.6 * (1 - redHot);
     const frostLeft = feedback ? THREE.MathUtils.clamp(1 - (heat - 1.2) / 3.2, 0.12, 1) : 1;
     mats.snowLip.color.copy(wetStone).lerp(snowColor, frostLeft);
     mats.frost.opacity = 0.85 * frostLeft;
