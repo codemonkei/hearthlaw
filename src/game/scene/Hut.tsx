@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { WINDOW_MATERIALS } from "@/game/scene/Atmosphere";
+import { Heater, heaterFlueLocal, type HeaterState } from "@/game/scene/Heater";
 import { RidgeSnow, roofSnowSlab, SNOW_COLOR, SnowHeaps } from "@/game/scene/snow";
 
 /*
@@ -50,7 +51,17 @@ export function hutFlue(): [number, number, number] {
   return [p.x, TILE_TOP + p.y, p.z];
 }
 
-export function TimberHut({ warmth, selected }: { warmth: number; selected: boolean }) {
+/** The heater stands on the front gable, right of the door, where the camera can see it. */
+const HEATER_AT: [number, number, number] = [0.22, 0, HL + LOG_R + 0.07];
+const HEATER_TURN = 0;
+
+/** Where a lit heater's stovepipe smokes, relative to the tile's slab centre. */
+export function hutHeaterFlue(): [number, number, number] {
+  const p = heaterFlueLocal(HEATER_AT, HEATER_TURN).applyAxisAngle(new THREE.Vector3(0, 1, 0), HUT_FACING);
+  return [p.x, TILE_TOP + p.y, p.z];
+}
+
+export function TimberHut({ warmth, selected, heater = "none" }: { warmth: number; selected: boolean; heater?: HeaterState }) {
   const logColor = selected ? "#c97a43" : LOG;
   const slope = useMemo(() => {
     const run = HW + EAVE;
@@ -248,6 +259,8 @@ export function TimberHut({ warmth, selected }: { warmth: number; selected: bool
           <meshStandardMaterial color={IRON} {...FLAT} />
         </mesh>
       </group>
+
+      <Heater state={heater} position={HEATER_AT} rotationY={HEATER_TURN} />
 
       <SnowHeaps
         at={[

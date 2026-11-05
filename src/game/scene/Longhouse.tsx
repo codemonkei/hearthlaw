@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { WINDOW_MATERIALS } from "@/game/scene/Atmosphere";
+import { Heater, heaterFlueLocal, type HeaterState } from "@/game/scene/Heater";
 import { RidgeSnow, roofSnowSlab, SNOW_COLOR, SnowHeaps } from "@/game/scene/snow";
 
 /*
@@ -54,7 +55,17 @@ export function longhouseFlues(): [number, number, number][] {
   });
 }
 
-export function Longhouse({ warmth, selected }: { warmth: number; selected: boolean }) {
+/** The heater stands on the front gable, left of the porch, where the camera can see it. */
+const HEATER_AT: [number, number, number] = [-0.3, 0, HL + LOG_R + 0.07];
+const HEATER_TURN = 0;
+
+/** Where a lit heater's stovepipe smokes, relative to the tile's slab centre. */
+export function longhouseHeaterFlue(): [number, number, number] {
+  const p = heaterFlueLocal(HEATER_AT, HEATER_TURN).applyAxisAngle(new THREE.Vector3(0, 1, 0), LONGHOUSE_FACING);
+  return [p.x, TILE_TOP + p.y, p.z];
+}
+
+export function Longhouse({ warmth, selected, heater = "none" }: { warmth: number; selected: boolean; heater?: HeaterState }) {
   const logColor = selected ? "#c97a43" : LOG;
   const slope = useMemo(() => {
     const run = HW + EAVE;
@@ -314,6 +325,8 @@ export function Longhouse({ warmth, selected }: { warmth: number; selected: bool
           <meshStandardMaterial color={PLANK} {...FLAT} />
         </mesh>
       </group>
+
+      <Heater state={heater} position={HEATER_AT} rotationY={HEATER_TURN} />
 
       <SnowHeaps
         at={[

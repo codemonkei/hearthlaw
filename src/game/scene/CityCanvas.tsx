@@ -38,8 +38,9 @@ import {
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
 import { CanvasTent, tentFlue } from "@/game/scene/Tent";
-import { hutFlue, TimberHut } from "@/game/scene/Hut";
-import { Longhouse, longhouseFlues } from "@/game/scene/Longhouse";
+import { hutFlue, hutHeaterFlue, TimberHut } from "@/game/scene/Hut";
+import type { HeaterState } from "@/game/scene/Heater";
+import { Longhouse, longhouseFlues, longhouseHeaterFlue } from "@/game/scene/Longhouse";
 import { Kiln, kilnStackTop } from "@/game/scene/Kiln";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
@@ -161,11 +162,21 @@ function chimneys(kind: BuildingKind): Flue[] {
   return [{ at: [0.22, tall ? 1.32 : 0.97, 0], strength }];
 }
 
-function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: number; selected: boolean }) {
+function Structure({
+  kind,
+  warmth,
+  selected,
+  heater = "none",
+}: {
+  kind: BuildingKind;
+  warmth: number;
+  selected: boolean;
+  heater?: HeaterState;
+}) {
   const stone = "#3b4a5c";
   if (kind === "tent") return <CanvasTent warmth={warmth} selected={selected} />;
-  if (kind === "hut") return <TimberHut warmth={warmth} selected={selected} />;
-  if (kind === "longhouse") return <Longhouse warmth={warmth} selected={selected} />;
+  if (kind === "hut") return <TimberHut warmth={warmth} selected={selected} heater={heater} />;
+  if (kind === "longhouse") return <Longhouse warmth={warmth} selected={selected} heater={heater} />;
   if (kind === "vent") {
     return (
       <group>
@@ -489,6 +500,9 @@ function City() {
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
         const deposit = liveDeposit(tile);
+        const heaterLit = Boolean(building?.heater && building.heaterFed);
+        const heaterFlue = heaterLit && building?.kind === "hut" ? hutHeaterFlue() : heaterLit && building?.kind === "longhouse" ? longhouseHeaterFlue() : null;
+        if (heaterFlue) smoke.push({ pos: [x + heaterFlue[0], y + heaterFlue[1], z + heaterFlue[2]], strength: 0.5 });
         for (const flue of building ? chimneys(building.kind) : []) {
           smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
         }
@@ -538,7 +552,12 @@ function City() {
             </mesh>
             {!building && (deposit === "peat" || deposit === "scrap") && <DepositProp deposit={deposit} />}
             {building && (
-              <Structure kind={building.kind} warmth={buildingWarmth(sim, building)} selected={building.id === selectedId} />
+              <Structure
+                kind={building.kind}
+                warmth={buildingWarmth(sim, building)}
+                selected={building.id === selectedId}
+                heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
+              />
             )}
             {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (
               <mesh position={[0, 0.45, 0]}>

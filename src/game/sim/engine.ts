@@ -525,6 +525,9 @@ export function toggleHeater(sim: SimState, id: number): { ok: boolean; reason?:
   if (!b.heater && !canAfford(sim, 0, 4)) return { ok: false, reason: "Fitting a heater takes 4 iron." };
   if (!b.heater) pay(sim, 0, 4);
   b.heater = !b.heater;
+  // Normally a heater lights on the next hour's fuel round; in test mode it lights at once.
+  if (!b.heater) b.heaterFed = false;
+  else if (sim.testMode && sim.kiln.running) b.heaterFed = true;
   pushLog(sim, b.heater ? "Heater fitted." : "Heater shut and left in place.");
   return { ok: true };
 }
