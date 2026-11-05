@@ -1,3 +1,5 @@
+import type { Terrain } from "./types";
+
 export const HEX_SIZE = 1.18;
 
 export function hexDist(q1: number, r1: number, q2 = 0, r2 = 0): number {
@@ -16,12 +18,28 @@ export function hexRange(radius: number): { q: number; r: number }[] {
   return out;
 }
 
-/** Pointy-top axial → world. Y is the crater bowl (rim higher). */
-export function hexToWorld(q: number, r: number): [number, number, number] {
-  const x = HEX_SIZE * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const z = HEX_SIZE * (3 / 2) * r;
-  const dist = Math.hypot(x, z);
-  const y = (dist / 9.2) ** 2 * 1.35;
+export const MAP_RADIUS = 4;
+
+function bowl(dist: number): number {
+  return (dist / 9.2) ** 2 * 1.35;
+}
+
+function planar(q: number, r: number): [number, number] {
+  return [HEX_SIZE * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r), HEX_SIZE * (3 / 2) * r];
+}
+
+/** Height of the outermost hex (the ring's corners) above the centre in a pit. */
+const RIM_HEIGHT = Math.max(...hexRange(MAP_RADIUS).map(({ q, r }) => bowl(Math.hypot(...planar(q, r)))));
+
+/**
+ * Pointy-top axial → world. Y is the top of the tile above the ground (0).
+ * Pit: centre is level with the ground and the rim rises. Hill: the rim's
+ * lowest hexes are level with the ground and the centre is the summit.
+ */
+export function hexToWorld(q: number, r: number, terrain: Terrain = "pit"): [number, number, number] {
+  const [x, z] = planar(q, r);
+  const b = bowl(Math.hypot(x, z));
+  const y = terrain === "pit" ? b : RIM_HEIGHT - b;
   return [x, y, z];
 }
 

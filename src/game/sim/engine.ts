@@ -11,9 +11,10 @@ import {
   outdoorBand,
   outdoorTemp,
 } from "./content";
-import { hexDist, hexRange } from "./hex";
+import { MAP_RADIUS, hexDist, hexRange } from "./hex";
 import { clamp, rand, rollCount, seedRng } from "./rng";
 import type {
+  Terrain,
   Building,
   BuildingKind,
   ChronicleAxis,
@@ -218,9 +219,15 @@ function shiftCohort(
   return take;
 }
 
+/** Derived from the seed without drawing from the rng, so the sim sequence is unchanged. */
+export function terrainForSeed(seed: number): Terrain {
+  return (seed >>> 0) % 2 === 0 ? "pit" : "hill";
+}
+
 export function createGame(seed: number): SimState {
   const sim: SimState = {
     seed,
+    terrain: terrainForSeed(seed),
     rng: seedRng(seed),
     minute: 6 * 60,
     speed: 1,
@@ -272,7 +279,7 @@ export function createGame(seed: number): SimState {
 }
 
 function makeTiles(sim: SimState): Tile[] {
-  const coords = hexRange(4);
+  const coords = hexRange(MAP_RADIUS);
   const tiles: Tile[] = coords.map((c) => ({
     q: c.q,
     r: c.r,

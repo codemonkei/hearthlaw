@@ -7,12 +7,38 @@ import { keyDown } from "@/game/input/keys";
 import { outdoorBand, outdoorTemp } from "@/game/sim/content";
 import { buildingWarmth, sourceAt } from "@/game/sim/engine";
 import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
-import type { BuildingKind, Tile } from "@/game/sim/types";
+import type { BuildingKind, Terrain, Tile } from "@/game/sim/types";
+
+/** Tile tops from hexToWorld; the lowest hexes sit level with this plane. */
+const GROUND_Y = -0.02;
+/** Half the old slab thickness: structures are authored relative to the slab centre. */
+const SLAB_HALF = 0.1;
+/** How far each tile column reaches below the ground plane. */
+const COLUMN_SINK = 0.3;
 import { useGame } from "@/game/store";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
+const _shift = new THREE.Vector3();
+
+/** How far from the Kiln the camera's focus may wander (the map is ~8 units across its radius). */
+const PAN_LIMIT = 10;
+
+/** Keep the focus on the ground and over the map; move the camera with it so the view doesn't jump. */
+function clampTarget(c: OrbitControlsImpl) {
+  const t = c.target;
+  _shift.set(0, -t.y, 0);
+  const r = Math.hypot(t.x, t.z);
+  if (r > PAN_LIMIT) {
+    const k = PAN_LIMIT / r;
+    _shift.x = t.x * k - t.x;
+    _shift.z = t.z * k - t.z;
+  }
+  if (_shift.lengthSq() === 0) return;
+  t.add(_shift);
+  c.object.position.add(_shift);
+}
 
 function heatHex(w: number): string {
   if (w <= -3) return "#3c2a62";
@@ -31,6 +57,7 @@ function CameraRig() {
     drive(d);
     const c = controls.current;
     if (!c) return;
+    clampTarget(c);
     const cam = c.object;
     _fwd.set(c.target.x - cam.position.x, 0, c.target.z - cam.position.z);
     if (_fwd.lengthSq() < 1e-5) return;
@@ -61,7 +88,8 @@ function CameraRig() {
       makeDefault
       enableDamping
       dampingFactor={0.12}
-      maxPolarAngle={Math.PI / 2.05}
+      maxPolarAngle={Math.PI / 2.4}
+      screenSpacePanning={false}
       minPolarAngle={0.38}
       minDistance={8}
       maxDistance={34}
@@ -111,7 +139,17 @@ function Snow() {
   );
 }
 
-function Kiln({ strain, pressure, running }: { strain: number; pressure: number; running: boolean }) {
+function Kiln({
+  strain,
+  pressure,
+  running,
+  terrain,
+}: {
+  strain: number;
+  pressure: number;
+  running: boolean;
+  terrain: Terrain;
+}) {
   const light = useRef<THREE.PointLight>(null);
   const core = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -123,7 +161,7 @@ function Kiln({ strain, pressure, running }: { strain: number; pressure: number;
       mat.emissiveIntensity = pulse;
     }
   });
-  const y = hexToWorld(0, 0)[1];
+  const y = hexToWorld(0, 0, terrain)[1] - SLAB_HALF;
   return (
     <group position={[0, y, 0]}>
       <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
@@ -246,7 +284,7 @@ function City() {
   const select = useGame((s) => s.select);
   const sim = useGame.getState().sim;
   const [hover, setHover] = useState<string | null>(null);
-  const hexGeo = useMemo(() => new THREE.CylinderGeometry(HEX_SIZE * 0.94, HEX_SIZE * 0.96, 0.2, 6), []);
+  const hexGeo = useMemo(() => new THREE.CylinderGeometry(HEX_SIZE * 0.94, HEX_SIZE * 0.96, 1, 6), []);
 
   if (!sim) return null;
   void rev;
@@ -256,22 +294,26 @@ function City() {
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, 0]} receiveShadow>
-        <circleGeometry args={[28, 48]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, GROUND_Y, 0]} receiveShadow>
+        <circleGeometry args={[90, 64]} />
         <meshStandardMaterial color="#9eacb8" roughness={1} />
       </mesh>
       {Array.from({ length: 14 }).map((_, i) => {
         const a = (i / 14) * Math.PI * 2;
         const rad = 16 + (i % 3) * 0.8;
         return (
-          <mesh key={i} position={[Math.cos(a) * rad, 0.4, Math.sin(a) * rad]} castShadow>
+          <mesh key={i} position={[Math.cos(a) * rad, 0.75, Math.sin(a) * rad]} castShadow>
             <coneGeometry args={[1.4 + (i % 4) * 0.35, 3.2 + (i % 5), 5]} />
             <meshStandardMaterial color={i % 2 ? "#c5d0da" : "#8ea0b0"} roughness={0.95} />
           </mesh>
         );
       })}
       {sim.tiles.map((tile) => {
-        const [x, y, z] = hexToWorld(tile.q, tile.r);
+        const [x, top, z] = hexToWorld(tile.q, tile.r, sim.terrain);
+        // Group origin stays at the old slab centre so structure offsets are unchanged.
+        const y = top - SLAB_HALF;
+        // Solid column from the tile top down past the ground, so nothing floats.
+        const column = top - GROUND_Y + COLUMN_SINK;
         const key = `${tile.q}:${tile.r}`;
         const isKiln = tile.q === 0 && tile.r === 0;
         const src = sourceAt(sim, tile.q, tile.r);
@@ -288,6 +330,8 @@ function City() {
           <group key={key} position={[x, y, z]}>
             <mesh
               geometry={hexGeo}
+              position={[0, SLAB_HALF - column / 2, 0]}
+              scale={[1, column, 1]}
               rotation={[0, Math.PI / 6, 0]}
               receiveShadow
               onPointerOver={(e) => {
@@ -323,7 +367,12 @@ function City() {
           </group>
         );
       })}
-      <Kiln strain={sim.kiln.strain} pressure={sim.kiln.pressure} running={sim.kiln.running && sim.kiln.pressure > 0} />
+      <Kiln
+        strain={sim.kiln.strain}
+        pressure={sim.kiln.pressure}
+        running={sim.kiln.running && sim.kiln.pressure > 0}
+        terrain={sim.terrain}
+      />
     </group>
   );
 }

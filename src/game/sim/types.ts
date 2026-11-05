@@ -98,8 +98,12 @@ export interface PromiseMark {
 
 export type DealKind = "tribute-fuel" | "tribute-meals" | "promise";
 
+export type Terrain = "pit" | "hill";
+
 export interface SimState {
   seed: number;
+  /** Pit: the city sinks toward the Kiln. Hill: it climbs to it. */
+  terrain: Terrain;
   rng: [number, number, number, number];
   minute: number;
   speed: 0 | 1 | 2 | 4;

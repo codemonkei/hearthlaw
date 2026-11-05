@@ -41,6 +41,7 @@ export function loadSim(): SimState | null {
     if (!parsed.success) return null;
     const sim = parsed.data.sim as unknown as SimState;
     sim.speed = 0;
+    sim.terrain ??= "pit";
     return sim;
   } catch {
     return null;
