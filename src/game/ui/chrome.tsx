@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BookOpen,
-  ChevronDown,
-  ChevronUp,
+  HousePlus,
   Eye,
   FastForward,
   Flame,
@@ -123,10 +122,10 @@ function TopBar() {
       </div>
       <div className="hl-panel flex min-w-0 max-w-full items-center gap-2 overflow-x-auto px-3 py-2 max-md:order-first">
         {items.map((item) => (
-          <div key={item.label} className="flex min-w-14 flex-col items-center px-1">
+          <div key={item.label} title={item.label} aria-label={`${item.label} ${item.value}`} className="flex min-w-10 flex-col items-center px-1 lg:min-w-14">
             {item.icon}
             <span className="hl-display text-base leading-tight">{item.value}</span>
-            <span className="text-[0.65rem] tracking-wide text-mist uppercase">{item.label}</span>
+            <span className="hidden text-[0.65rem] tracking-wide text-mist uppercase lg:block">{item.label}</span>
           </div>
         ))}
       </div>
@@ -330,6 +329,7 @@ function Dock() {
   const confirmTile = useGame((s) => s.confirmTile);
   const setPendingTile = useGame((s) => s.setPendingTile);
   const panel = useGame((s) => s.panel);
+  const dockOpen = useGame((s) => s.dockOpen);
   if (panel) return null;
   return (
     <div className="pointer-events-auto px-2">
@@ -360,7 +360,7 @@ function Dock() {
         </div>
         );
       })()}
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className={`flex items-start gap-2 overflow-x-auto pb-2 ${dockOpen ? "" : "max-lg:hidden"}`}>
         {DOCK_ORDER.map((kind) => (
           <DockButton key={kind} kind={kind} active={buildKind === kind} timber={sim.resources.timber} iron={sim.resources.iron} onClick={() => chooseBuild(kind)} />
         ))}
@@ -390,13 +390,14 @@ function DockButton({
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-16 min-w-28 shrink-0 rounded-xl border px-3 py-2 text-left ${active ? "border-ember bg-panel-2" : "border-line bg-panel"} ${afford ? "" : "opacity-60"}`}
+      aria-pressed={active}
+      className={`min-w-28 shrink-0 rounded-xl border px-3 py-2 text-left ${active ? "border-ember bg-panel-2" : "border-line bg-panel"} ${afford ? "" : "opacity-60"}`}
     >
       <div className="hl-display text-sm leading-tight">{def.name}</div>
       <div className="mt-1 text-xs text-mist">
         {free ? "free (test mode)" : `${def.cost.timber} timber${def.cost.iron ? ` · ${def.cost.iron} iron` : ""}`}
       </div>
-      <div className={`mt-0.5 text-[0.65rem] leading-tight ${active ? "text-ember" : "text-mist/80"}`}>{hint}</div>
+      {active && <div className="mt-1 max-w-44 text-[0.65rem] leading-tight text-ember">{hint}</div>}
     </button>
   );
 }
@@ -429,24 +430,38 @@ function MobileKiln() {
   const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
   const lit = sim.kiln.running && sim.kiln.pressure > 0;
   const cell = "flex h-9 w-12 items-center justify-center rounded-lg text-sm";
+  const dockOpen = useGame((s) => s.dockOpen);
+  const toggleDock = useGame((s) => s.toggleDock);
+  const railBtn = (active: boolean) =>
+    `relative flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line ${active ? "bg-ember text-ink" : "bg-panel text-snow"}`;
   return (
     <div className="pointer-events-auto absolute top-2 left-2 flex flex-col items-start gap-2 lg:hidden">
       <button
         type="button"
+        aria-pressed={dockOpen}
+        aria-label={dockOpen ? "Hide the build menu" : "Show the build menu"}
+        className={railBtn(dockOpen)}
+        onClick={toggleDock}
+      >
+        <HousePlus className="size-5" />
+      </button>
+      <button
+        type="button"
         aria-expanded={open}
-        aria-label={open ? "Fold the Kiln controls" : "Open the Kiln controls"}
-        className={`flex min-h-11 items-center gap-1.5 rounded-xl border border-line px-2.5 ${open ? "bg-panel-2" : "bg-panel"} text-snow`}
+        aria-label={`Kiln: pressure ${sim.kiln.pressure}, ring ${sim.kiln.radius}${lit ? `, ${burn} fuel an hour` : ", dark"}`}
+        className={railBtn(open)}
         onClick={toggle}
       >
-        <Flame className={`size-5 ${lit ? "text-ember" : "text-mist"}`} />
-        <span className="text-xs tabular-nums">
-          P{sim.kiln.pressure} · R{sim.kiln.radius}
-          <span className="text-mist"> · {lit ? `${burn}/h` : "dark"}</span>
+        <Flame className={`size-5 ${open ? "" : lit ? "text-ember" : "text-mist"}`} />
+        <span
+          className={`absolute -right-1 -bottom-1 rounded px-1 text-[0.6rem] leading-tight font-semibold ${open ? "bg-ink text-ember" : "bg-ember text-ink"}`}
+        >
+          {sim.kiln.pressure}
         </span>
-        {open ? <ChevronUp className="size-4 text-mist" /> : <ChevronDown className="size-4 text-mist" />}
       </button>
       {open && (
         <div className="flex flex-col gap-1.5 hl-panel p-1.5">
+          <p className="text-center text-[0.65rem] leading-tight text-mist">{lit ? `${burn} fuel/h` : "Dark"}</p>
           <div className="flex gap-1">
             <div role="group" aria-label="Pressure" className="flex flex-col gap-1">
               {([4, 3, 2, 1, 0] as const).map((n) => (

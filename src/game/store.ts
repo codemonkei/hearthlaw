@@ -22,6 +22,7 @@ import type { BuildingKind, CircleId, ClauseId, DealKind, Difficulty, ResearchId
 
 const FX_KEY = "hearthlaw.fx";
 const DIFFICULTY_KEY = "hearthlaw.difficulty";
+const DOCK_KEY = "hearthlaw.dock";
 
 function store(key: string, value: string): void {
   try {
@@ -66,6 +67,9 @@ interface GameStore {
   phase: "title" | "play";
   rev: number;
   buildKind: BuildingKind | null;
+  /** Phones: the build cards can be folded away. Desktop always shows them. */
+  dockOpen: boolean;
+  toggleDock: () => void;
   selectedId: number | null;
   panel: PanelId;
   heat: boolean;
@@ -147,6 +151,7 @@ export const useGame = create<GameStore>((set, get) => {
     phase: "title",
     rev: 0,
     buildKind: null,
+    dockOpen: read(DOCK_KEY) !== "0",
     selectedId: null,
     panel: null,
     heat: false,
@@ -282,6 +287,12 @@ export const useGame = create<GameStore>((set, get) => {
     setFx: (fx) => {
       store(FX_KEY, fx);
       set({ fx });
+    },
+    toggleDock: () => {
+      const dockOpen = !get().dockOpen;
+      store(DOCK_KEY, dockOpen ? "1" : "0");
+      // Folding the cards away also puts down whatever was about to be built.
+      set({ dockOpen, ...(dockOpen ? {} : { buildKind: null, pendingTile: null }), rev: get().rev + 1 });
     },
     setDifficulty: (difficulty) => {
       store(DIFFICULTY_KEY, difficulty);
