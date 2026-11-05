@@ -5,15 +5,20 @@ import {
   CLAUSES,
   DAY_MINUTES,
   DEPOT_BONUS,
+  DEPOSIT_NAMES,
+  EXTRACTION,
+  MAP_RADIUS,
+  warmthLabel,
   RESEARCH,
   VICTORY_MINUTE,
   dayIndex,
   outdoorBand,
   outdoorTemp,
 } from "./content";
-import { MAP_RADIUS, hexDist, hexRange } from "./hex";
+import { hexDist, hexRange } from "./hex";
 import { clamp, rand, rollCount, seedRng } from "./rng";
 import type {
+  Deposit,
   Terrain,
   Building,
   BuildingKind,
@@ -71,15 +76,16 @@ export function heatLevel(sim: SimState): number {
   return sim.kiln.pressure + (sim.kiln.surge ? 1 : 0);
 }
 
+/** Inside the Kiln's radius or beside a relay vent — warmed whenever the Kiln burns. */
+export function inWarmth(sim: SimState, q: number, r: number): boolean {
+  if (hexDist(q, r) <= sim.kiln.radius) return true;
+  return sim.buildings.some((b) => b.kind === "vent" && hexDist(q, r, b.q, b.r) <= 1);
+}
+
 export function sourceAt(sim: SimState, q: number, r: number): number {
   const level = heatLevel(sim);
   if (level <= 0) return 0;
-  let s = hexDist(q, r) <= sim.kiln.radius ? level : 0;
-  for (const b of sim.buildings) {
-    if (b.kind !== "vent") continue;
-    if (hexDist(q, r, b.q, b.r) <= 1) s = Math.max(s, level);
-  }
-  return s;
+  return inWarmth(sim, q, r) ? level : 0;
 }
 
 export function buildingWarmth(sim: SimState, b: Building): number {
@@ -313,6 +319,99 @@ function makeTiles(sim: SimState): Tile[] {
   return tiles;
 }
 
+/** A tile's deposit, or "none" once it has been worked out. */
+export function liveDeposit(tile: Tile): Deposit {
+  return tile.deposit !== "none" && tile.depositLeft > 0 ? tile.deposit : "none";
+}
+
+export type TileFit = "best" | "ok" | "poor" | "blocked";
+
+export interface PlacementFit {
+  fit: TileFit;
+  /** One short line: the yield, the warmth, or why not. */
+  note: string;
+}
+
+function signed(n: number): string {
+  return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
+}
+
+/** Warmth a building of this kind would have on this tile right now. */
+export function warmthIfBuilt(sim: SimState, kind: BuildingKind, q: number, r: number): number {
+  const def = BUILDINGS[kind];
+  const ins = def.insulation + (def.housing > 0 ? sim.insulationBonus : 0);
+  return outdoorBand(outdoorTemp(sim.minute)) + sourceAt(sim, q, r) + ins;
+}
+
+/** How well a building would sit on a tile. Pure: the scene and the dock both read it. */
+export function assessPlacement(sim: SimState, kind: BuildingKind, q: number, r: number): PlacementFit {
+  const tile = tileAt(sim, q, r);
+  if (!tile) return { fit: "blocked", note: "Beyond the cirque." };
+  if (q === 0 && r === 0) return { fit: "blocked", note: "The Kiln stands here." };
+  if (tile.buildingId != null) return { fit: "blocked", note: "Something already stands here." };
+  const deposit = liveDeposit(tile);
+  const covers = deposit === "none" ? "" : `Covers a ${DEPOSIT_NAMES[deposit].toLowerCase()}`;
+
+  const ex = EXTRACTION[kind];
+  if (ex) {
+    const want = DEPOSIT_NAMES[ex.deposit].toLowerCase();
+    if (deposit === ex.deposit) return { fit: "best", note: `${ex.yieldOn} · ${tile.depositLeft} left` };
+    if (ex.off === 0) return { fit: "blocked", note: `Only stands on a ${want}.` };
+    return { fit: "poor", note: `+${ex.off} ${ex.resource}/h · no ${want}${covers ? ` · ${covers.toLowerCase()}` : ""}` };
+  }
+
+  if (kind === "vent") {
+    let fresh = 0;
+    for (const t of sim.tiles) {
+      if (hexDist(t.q, t.r, q, r) <= 1 && !inWarmth(sim, t.q, t.r)) fresh++;
+    }
+    const note = fresh > 0 ? `Warms ${fresh} more tile${fresh === 1 ? "" : "s"}` : "Warms nothing new";
+    if (covers) return { fit: "poor", note: `${note} · ${covers.toLowerCase()}` };
+    return { fit: fresh >= 3 ? "best" : fresh > 0 ? "ok" : "poor", note };
+  }
+
+  if (BUILDINGS[kind].housing > 0) {
+    const w = warmthIfBuilt(sim, kind, q, r);
+    const inside = `${warmthLabel(w)} inside (${signed(w)})`;
+    if (covers) return { fit: "poor", note: `${inside} · ${covers.toLowerCase()}` };
+    if (!inWarmth(sim, q, r)) return { fit: "poor", note: `${inside} · outside the warmth` };
+    return { fit: "best", note: inside };
+  }
+
+  if (covers) return { fit: "poor", note: `${covers} other yards could use` };
+  return { fit: "ok", note: "Clear ground" };
+}
+
+/** A short dock line: where this building belongs and how many such tiles are free. */
+export function placementHint(sim: SimState, kind: BuildingKind): string {
+  const best = sim.tiles.filter((t) => assessPlacement(sim, kind, t.q, t.r).fit === "best").length;
+  const ex = EXTRACTION[kind];
+  if (ex) {
+    const name = DEPOSIT_NAMES[ex.deposit].toLowerCase();
+    return `${ex.off === 0 ? "Only on" : "Best on"} ${name} · ${best} free`;
+  }
+  if (kind === "vent") return `Best at the warmth's edge · ${best} spots`;
+  if (BUILDINGS[kind].housing > 0) return `Best inside the warmth · ${best} free`;
+  return "Any clear ground";
+}
+
+/** Hover line for a tile with nothing being placed. */
+export function describeTile(sim: SimState, q: number, r: number): { title: string; detail: string } | null {
+  const tile = tileAt(sim, q, r);
+  if (!tile) return null;
+  if (q === 0 && r === 0) return { title: "The Kiln", detail: `Radius ${sim.kiln.radius} · pressure ${sim.kiln.pressure}` };
+  const b = tile.buildingId != null ? sim.buildings.find((x) => x.id === tile.buildingId) : undefined;
+  if (b) {
+    const w = buildingWarmth(sim, b);
+    return { title: BUILDINGS[b.kind].name, detail: `${warmthLabel(w)} (${signed(w)})` };
+  }
+  const deposit = liveDeposit(tile);
+  const w = outdoorBand(outdoorTemp(sim.minute)) + sourceAt(sim, q, r);
+  const title = deposit === "none" ? (tile.deposit === "none" ? "Open snow" : "Worked-out ground") : DEPOSIT_NAMES[deposit];
+  const left = deposit === "none" ? "" : ` · ${tile.depositLeft} left`;
+  return { title, detail: `${warmthLabel(w)} (${signed(w)})${left}` };
+}
+
 export function tileAt(sim: SimState, q: number, r: number): Tile | undefined {
   return sim.tiles.find((t) => t.q === q && t.r === r);
 }
@@ -325,9 +424,8 @@ export function placeBuilding(
 ): { ok: boolean; reason?: string } {
   if (sim.outcome) return { ok: false, reason: "The watch is over." };
   const tile = tileAt(sim, q, r);
-  if (!tile) return { ok: false, reason: "Beyond the cirque." };
-  if (q === 0 && r === 0) return { ok: false, reason: "The Kiln stands here." };
-  if (tile.buildingId != null) return { ok: false, reason: "Something already stands here." };
+  const fit = assessPlacement(sim, kind, q, r);
+  if (!tile || fit.fit === "blocked") return { ok: false, reason: fit.note };
   const def = BUILDINGS[kind];
   if (!canAfford(sim, def.cost.timber, def.cost.iron)) {
     return { ok: false, reason: "Not enough timber or iron." };
@@ -663,19 +761,22 @@ function runProduction(sim: SimState, eco: EconomySnapshot, hour: number): void 
     const tile = tileAt(sim, b.q, b.r);
     const scale = (base: number) => Math.max(0, Math.round(base * ratio));
     if (b.kind === "peat" && !peatClosed) {
+      const ex = EXTRACTION.peat!;
       const onSeam = tile?.deposit === "peat" && (tile.depositLeft ?? 0) > 0;
-      const gain = scale(onSeam ? 10 : 2);
+      const gain = scale(onSeam ? ex.on : ex.off);
       if (onSeam && tile) tile.depositLeft = Math.max(0, tile.depositLeft - gain);
       const spill = addResource(sim, "fuel", gain);
       if (spill > 0) noteSpill(sim, "fuel");
     } else if (b.kind === "wood") {
+      const ex = EXTRACTION.wood!;
       const on = tile?.deposit === "timber" && tile.depositLeft > 0;
-      const gain = scale(on ? 8 : 2);
+      const gain = scale(on ? ex.on : ex.off);
       if (on && tile) tile.depositLeft = Math.max(0, tile.depositLeft - gain);
       addResource(sim, "timber", gain);
     } else if (b.kind === "trappers") {
+      const ex = EXTRACTION.trappers!;
       const on = tile?.deposit === "lichen" && tile.depositLeft > 0;
-      const gain = scale(on ? 4 : 1);
+      const gain = scale(on ? ex.on : ex.off);
       if (on && tile) tile.depositLeft = Math.max(0, tile.depositLeft - gain);
       addResource(sim, "raw", gain);
     } else if (b.kind === "salvage") {

@@ -1,3 +1,4 @@
+import { MAP_RADIUS } from "./content";
 import type { Terrain } from "./types";
 
 export const HEX_SIZE = 1.18;
@@ -17,8 +18,6 @@ export function hexRange(radius: number): { q: number; r: number }[] {
   }
   return out;
 }
-
-export const MAP_RADIUS = 4;
 
 function bowl(dist: number): number {
   return (dist / 9.2) ** 2 * 1.35;

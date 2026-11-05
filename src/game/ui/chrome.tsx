@@ -34,7 +34,9 @@ import {
   warmthLabel,
 } from "@/game/sim/content";
 import {
+  assessPlacement,
   buildingWarmth,
+  placementHint,
   clauseGate,
   endingLine,
   evaluate,
@@ -279,13 +281,24 @@ function Dock() {
   if (panel) return null;
   return (
     <div className="pointer-events-auto px-2">
-      {pending && buildKind && (
+      {pending && buildKind && (() => {
+        const fit = assessPlacement(sim, buildKind, pending.q, pending.r);
+        const blocked = fit.fit === "blocked";
+        return (
         <div className="mb-2 flex items-center justify-between gap-2 hl-panel px-3 py-2">
           <span className="text-sm">
-            Place {BUILDINGS[buildKind].name} on this tile?
+            Place {BUILDINGS[buildKind].name} here?
+            <span className={`block text-xs ${blocked ? "text-blood" : fit.fit === "best" ? "text-ember" : "text-mist"}`}>
+              {fit.note}
+            </span>
           </span>
           <span className="flex gap-2">
-            <button type="button" className="min-h-11 rounded-lg bg-ember px-3 text-ink" onClick={confirmTile}>
+            <button
+              type="button"
+              disabled={blocked}
+              className="min-h-11 rounded-lg bg-ember px-3 text-ink disabled:opacity-40"
+              onClick={confirmTile}
+            >
               Place
             </button>
             <button type="button" className="min-h-11 rounded-lg bg-panel-2 px-3" onClick={() => setPendingTile(null)}>
@@ -293,7 +306,8 @@ function Dock() {
             </button>
           </span>
         </div>
-      )}
+        );
+      })()}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {DOCK_ORDER.map((kind) => (
           <DockButton key={kind} kind={kind} active={buildKind === kind} timber={sim.resources.timber} iron={sim.resources.iron} onClick={() => chooseBuild(kind)} />
@@ -320,6 +334,7 @@ function DockButton({
   onClick: () => void;
 }) {
   const def = BUILDINGS[kind];
+  const hint = placementHint(useGame.getState().sim!, kind);
   const afford = timber >= def.cost.timber && iron >= def.cost.iron;
   return (
     <button
@@ -331,6 +346,7 @@ function DockButton({
       <div className="mt-1 text-xs text-mist">
         {def.cost.timber} timber{def.cost.iron ? ` · ${def.cost.iron} iron` : ""}
       </div>
+      <div className={`mt-0.5 text-[0.65rem] leading-tight ${active ? "text-ember" : "text-mist/80"}`}>{hint}</div>
     </button>
   );
 }

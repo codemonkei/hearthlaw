@@ -1,13 +1,23 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Html, OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { keyDown } from "@/game/input/keys";
-import { outdoorBand, outdoorTemp } from "@/game/sim/content";
-import { buildingWarmth, sourceAt } from "@/game/sim/engine";
+import { BUILDINGS, outdoorBand, outdoorTemp } from "@/game/sim/content";
+import {
+  assessPlacement,
+  buildingWarmth,
+  describeTile,
+  heatLevel,
+  inWarmth,
+  liveDeposit,
+  sourceAt,
+  type PlacementFit,
+  type TileFit,
+} from "@/game/sim/engine";
 import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
-import type { BuildingKind, Terrain, Tile } from "@/game/sim/types";
+import type { BuildingKind, Deposit, SimState, Terrain } from "@/game/sim/types";
 
 /** Tile tops from hexToWorld; the lowest hexes sit level with this plane. */
 const GROUND_Y = -0.02;
@@ -264,14 +274,169 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
   );
 }
 
-function DepositMark({ deposit }: { deposit: Tile["deposit"] }) {
-  if (deposit === "none") return null;
-  const color = deposit === "peat" ? "#2a241e" : deposit === "timber" ? "#6b4632" : deposit === "scrap" ? "#8d6a48" : "#6d7a52";
+const DEPOSIT_TILE: Record<Exclude<Deposit, "none">, string> = {
+  peat: "#5c5348",
+  timber: "#c9d4cf",
+  scrap: "#b7aa9c",
+  lichen: "#c5d0c4",
+};
+
+/** Readable at a glance: cut seams, pines, a rust heap, moss. Local y 0.1 is the tile top. */
+function DepositProp({ deposit }: { deposit: Deposit }) {
+  if (deposit === "peat") {
+    return (
+      <group>
+        {[-0.24, 0, 0.24].map((z) => (
+          <mesh key={z} position={[-0.05, 0.115, z]} receiveShadow>
+            <boxGeometry args={[0.8, 0.04, 0.12]} />
+            <meshStandardMaterial color="#1c1713" roughness={1} />
+          </mesh>
+        ))}
+        <mesh position={[0.45, 0.17, 0.32]} rotation={[0, 0.5, 0]} castShadow>
+          <boxGeometry args={[0.22, 0.14, 0.14]} />
+          <meshStandardMaterial color="#3b2f25" roughness={1} />
+        </mesh>
+      </group>
+    );
+  }
+  if (deposit === "timber") {
+    const pines: [number, number, number][] = [
+      [-0.32, -0.12, 1],
+      [0.22, -0.3, 0.8],
+      [0.08, 0.28, 1.15],
+      [0.42, 0.12, 0.7],
+    ];
+    return (
+      <group>
+        {pines.map(([x, z, k]) => (
+          <group key={`${x}:${z}`} position={[x, 0.1, z]} scale={k}>
+            <mesh position={[0, 0.07, 0]} castShadow>
+              <cylinderGeometry args={[0.035, 0.045, 0.14, 5]} />
+              <meshStandardMaterial color="#5a3e2b" roughness={1} />
+            </mesh>
+            <mesh position={[0, 0.36, 0]} castShadow>
+              <coneGeometry args={[0.2, 0.5, 6]} />
+              <meshStandardMaterial color="#3d5a48" roughness={0.95} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+    );
+  }
+  if (deposit === "scrap") {
+    return (
+      <group>
+        <mesh position={[0, 0.18, 0]} rotation={[0.1, 0.4, 0.15]} castShadow>
+          <boxGeometry args={[0.38, 0.16, 0.28]} />
+          <meshStandardMaterial color="#8a5a3c" roughness={0.8} metalness={0.3} />
+        </mesh>
+        <mesh position={[0.24, 0.16, 0.2]} rotation={[0, 0.9, -0.2]} castShadow>
+          <boxGeometry args={[0.22, 0.1, 0.2]} />
+          <meshStandardMaterial color="#6e4a35" roughness={0.85} metalness={0.25} />
+        </mesh>
+        <mesh position={[-0.2, 0.2, 0.14]} castShadow>
+          <coneGeometry args={[0.13, 0.24, 4]} />
+          <meshStandardMaterial color="#a0683f" roughness={0.8} metalness={0.3} />
+        </mesh>
+        <mesh position={[0.05, 0.15, -0.28]} rotation={[0, 0.3, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.55, 6]} />
+          <meshStandardMaterial color="#5b5f63" roughness={0.6} metalness={0.5} />
+        </mesh>
+      </group>
+    );
+  }
+  if (deposit === "lichen") {
+    const clumps: [number, number, number, string][] = [
+      [-0.3, -0.1, 0.17, "#7f9a6a"],
+      [0.15, -0.28, 0.13, "#94a77a"],
+      [0.25, 0.2, 0.19, "#6c8458"],
+      [-0.1, 0.3, 0.12, "#94a77a"],
+      [0.42, -0.05, 0.1, "#7f9a6a"],
+    ];
+    return (
+      <group>
+        {clumps.map(([x, z, r, c]) => (
+          <mesh key={`${x}:${z}`} position={[x, 0.1 + r * 0.25, z]} scale={[1, 0.45, 1]} castShadow>
+            <icosahedronGeometry args={[r, 0]} />
+            <meshStandardMaterial color={c} roughness={1} flatShading />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  return null;
+}
+
+const FIT_TILE: Record<Exclude<TileFit, "ok">, string> = {
+  best: "#e9b45c",
+  poor: "#56616c",
+  blocked: "#7c3b35",
+};
+
+const FIT_TEXT: Record<TileFit, string> = {
+  best: "text-ember",
+  ok: "text-snow",
+  poor: "text-mist",
+  blocked: "text-blood",
+};
+
+const AXIAL_DIRS: [number, number][] = [
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, 1],
+];
+
+/** Glowing outline around every tile the Kiln (and its relay vents) can warm. Grey while banked. */
+function HeatRing({ sim }: { sim: SimState }) {
+  const burning = heatLevel(sim) > 0;
+  const mat = useMemo(
+    () => new THREE.MeshBasicMaterial({ transparent: true, toneMapped: false, depthWrite: false }),
+    [],
+  );
+  const edgeGeo = useMemo(() => new THREE.BoxGeometry(HEX_SIZE * 1.02, 0.04, 0.09), []);
+  mat.color.set(burning ? "#f2a541" : "#9aa7b6");
+  useFrame(({ clock }) => {
+    mat.opacity = (burning ? 0.75 : 0.35) + Math.sin(clock.elapsedTime * 2.2) * 0.15;
+  });
+  const tops = new Map(sim.tiles.map((t) => [`${t.q}:${t.r}`, hexToWorld(t.q, t.r, sim.terrain)[1]]));
+  const edges: { pos: [number, number, number]; rot: number }[] = [];
+  for (const t of sim.tiles) {
+    if (!inWarmth(sim, t.q, t.r)) continue;
+    const [x, y, z] = hexToWorld(t.q, t.r, sim.terrain);
+    for (const [dq, dr] of AXIAL_DIRS) {
+      const nq = t.q + dq;
+      const nr = t.r + dr;
+      const nTop = tops.get(`${nq}:${nr}`);
+      if (nTop != null && inWarmth(sim, nq, nr)) continue;
+      const [nx, , nz] = hexToWorld(nq, nr, sim.terrain);
+      edges.push({
+        pos: [(x + nx) / 2, Math.max(y, nTop ?? y) + 0.03, (z + nz) / 2],
+        rot: Math.atan2(nx - x, nz - z),
+      });
+    }
+  }
   return (
-    <mesh position={[0.28, 0.12, 0.18]} castShadow>
-      <boxGeometry args={deposit === "timber" ? [0.28, 0.1, 0.12] : [0.22, 0.12, 0.18]} />
-      <meshStandardMaterial color={color} roughness={0.9} />
-    </mesh>
+    <group>
+      {edges.map((e, i) => (
+        <mesh key={i} geometry={edgeGeo} material={mat} position={e.pos} rotation={[0, e.rot, 0]} />
+      ))}
+    </group>
+  );
+}
+
+type Label = { at: [number, number, number]; title: string; fit?: TileFit; note: string };
+
+function HoverLabel({ at, title, fit, note }: Label) {
+  return (
+    <Html position={at} center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
+      <div className="hl-panel whitespace-nowrap px-2.5 py-1.5 text-center">
+        <div className="hl-display text-sm leading-tight text-snow">{title}</div>
+        <div className={`text-xs ${fit ? FIT_TEXT[fit] : "text-mist"}`}>{note}</div>
+      </div>
+    </Html>
   );
 }
 
@@ -283,7 +448,10 @@ function City() {
   const tryPlace = useGame((s) => s.tryPlace);
   const select = useGame((s) => s.select);
   const sim = useGame.getState().sim;
-  const [hover, setHover] = useState<string | null>(null);
+  const pendingTile = useGame((s) => s.pendingTile);
+  const [hoverKey, setHover] = useState<string | null>(null);
+  // Touch has no hover: the tile waiting for confirmation stands in for it.
+  const hover = hoverKey ?? (pendingTile ? `${pendingTile.q}:${pendingTile.r}` : null);
   const hexGeo = useMemo(() => new THREE.CylinderGeometry(HEX_SIZE * 0.94, HEX_SIZE * 0.96, 1, 6), []);
 
   if (!sim) return null;
@@ -291,6 +459,7 @@ function City() {
 
   const temp = outdoorTemp(sim.minute);
   const band = outdoorBand(temp);
+  const hoverInfo: { label: Label | null } = { label: null };
 
   return (
     <group>
@@ -319,13 +488,23 @@ function City() {
         const src = sourceAt(sim, tile.q, tile.r);
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
-        let color = "#d5dee6";
-        if (tile.deposit === "peat") color = "#5c5348";
-        else if (tile.deposit === "timber") color = "#c9d4cf";
-        else if (tile.deposit === "scrap") color = "#b7aa9c";
-        else if (tile.deposit === "lichen") color = "#c5d0c4";
+        const deposit = liveDeposit(tile);
+        let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
         if (heat && !isKiln) color = heatHex(building ? buildingWarmth(sim, building) : w);
-        if (hover === key) color = "#f2a541";
+        const fit: PlacementFit | null = buildKind && !isKiln ? assessPlacement(sim, buildKind, tile.q, tile.r) : null;
+        // Occupied tiles just dim; red is kept for open ground this building cannot use.
+        if (fit && fit.fit !== "ok") color = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
+        const hovered = hover === key;
+        if (hovered) {
+          color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
+          const at: [number, number, number] = [x, top + (building || isKiln ? 1.7 : 1.1), z];
+          if (fit && buildKind && !building) {
+            hoverInfo.label = { at, title: BUILDINGS[buildKind].name, fit: fit.fit, note: fit.note };
+          } else {
+            const info = describeTile(sim, tile.q, tile.r);
+            if (info) hoverInfo.label = { at, title: info.title, note: info.detail };
+          }
+        }
         return (
           <group key={key} position={[x, y, z]}>
             <mesh
@@ -354,11 +533,11 @@ function City() {
             >
               <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} />
             </mesh>
-            {!building && <DepositMark deposit={tile.deposit} />}
+            {!building && <DepositProp deposit={deposit} />}
             {building && (
               <Structure kind={building.kind} warmth={buildingWarmth(sim, building)} selected={building.id === selectedId} />
             )}
-            {buildKind && hover === key && !building && !isKiln && (
+            {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (
               <mesh position={[0, 0.45, 0]}>
                 <boxGeometry args={[0.7, 0.5, 0.6]} />
                 <meshStandardMaterial color="#f2a541" transparent opacity={0.35} />
@@ -367,6 +546,8 @@ function City() {
           </group>
         );
       })}
+      <HeatRing sim={sim} />
+      {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <Kiln
         strain={sim.kiln.strain}
         pressure={sim.kiln.pressure}

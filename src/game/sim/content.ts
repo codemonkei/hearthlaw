@@ -4,6 +4,7 @@ import type {
   CircleId,
   ClassName,
   ClauseId,
+  Deposit,
   ResearchId,
   ResourceKey,
 } from "./types";
@@ -208,6 +209,32 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     priority: 20,
     category: "civic",
   },
+};
+
+export const DEPOSIT_NAMES: Record<Exclude<Deposit, "none">, string> = {
+  peat: "Peat seam",
+  timber: "Standing grove",
+  scrap: "Scrap heap",
+  lichen: "Lichen patch",
+};
+
+/**
+ * Yards that draw from a deposit: what they raise per work hour at full crew,
+ * on their deposit and off it. `off: 0` means the yard cannot stand anywhere else.
+ */
+export interface ExtractionDef {
+  deposit: Exclude<Deposit, "none">;
+  yieldOn: string;
+  on: number;
+  off: number;
+  resource: ResourceKey;
+}
+
+export const EXTRACTION: Partial<Record<BuildingKind, ExtractionDef>> = {
+  peat: { deposit: "peat", resource: "fuel", on: 10, off: 2, yieldOn: "+10 fuel/h" },
+  wood: { deposit: "timber", resource: "timber", on: 8, off: 2, yieldOn: "+8 timber/h" },
+  trappers: { deposit: "lichen", resource: "raw", on: 4, off: 1, yieldOn: "+4 raw/h" },
+  salvage: { deposit: "scrap", resource: "iron", on: 2, off: 0, yieldOn: "+2 iron, +3 timber, +3 fuel/h" },
 };
 
 export const DOCK_ORDER: BuildingKind[] = [
