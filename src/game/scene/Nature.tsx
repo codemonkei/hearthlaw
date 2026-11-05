@@ -1,6 +1,8 @@
 import { useGLTF } from "@react-three/drei";
 import { Component, Suspense, useMemo, type ReactNode } from "react";
 import * as THREE from "three";
+import { FACING } from "@/game/scene/parts";
+import { LODGE_GROVE } from "@/game/scene/WoodLodge";
 import { liveDeposit } from "@/game/sim/engine";
 import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
 import type { SimState } from "@/game/sim/types";
@@ -149,8 +151,15 @@ function placements(sim: SimState): Map<NatureModel, Placement[]> {
     const building = t.buildingId != null ? sim.buildings.find((b) => b.id === t.buildingId) : undefined;
     if (building) {
       if (building.kind === "wood") {
-        add("WoodLog_Snow", { pos: [x - 0.5, top, z + 0.45], rotY: 0.4, scale: 0.28 });
-        add("TreeStump_Snow", { pos: [x + 0.55, top, z - 0.4], rotY: 1.2, scale: 0.3 });
+        // The lodge stands at the edge of its grove: pines behind it while the grove lasts, stumps after.
+        const live = liveDeposit(t) === "timber";
+        LODGE_GROVE.forEach(([lx, lz], k) => {
+          const c = Math.cos(FACING);
+          const s = Math.sin(FACING);
+          const pos: [number, number, number] = [x + lx * c + lz * s, top, z - lx * s + lz * c];
+          if (live) add(pick(PINES, hash(t.q, t.r, k)), { pos, rotY: hash(t.q, t.r, k + 9) * 6.28, scale: 0.34 + hash(t.q, t.r, k + 3) * 0.1 });
+          else add("TreeStump_Snow", { pos, rotY: hash(t.q, t.r, k + 5) * 6.28, scale: 0.28 });
+        });
       }
       continue;
     }
