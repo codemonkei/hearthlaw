@@ -70,14 +70,14 @@ function lathe(points: [number, number][], segments: number) {
 }
 
 /** A copper heat pipe: out of the drum, over an elbow, and down into the plinth. */
-function pipeGeometry() {
+function pipeGeometry(radius = 0.075) {
   const path = new THREE.CatmullRomCurve3([
     new THREE.Vector3(DRUM_R - 0.05, GRATE_Y + 0.3, 0),
     new THREE.Vector3(DRUM_R + 0.16, GRATE_Y + 0.3, 0),
     new THREE.Vector3(DRUM_R + 0.25, GRATE_Y + 0.12, 0),
     new THREE.Vector3(DRUM_R + 0.26, TILE_TOP + 0.2, 0),
   ]);
-  return new THREE.TubeGeometry(path, 16, 0.075, 7, false);
+  return new THREE.TubeGeometry(path, 16, radius, 7, false);
 }
 
 /** A jagged crack: a few short emissive segments in a zigzag, flat against the drum. */
@@ -106,6 +106,17 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
       mouth: new THREE.MeshStandardMaterial({ color: "#2a0d05", emissive: "#ffb15c", emissiveIntensity: 3, side: THREE.DoubleSide }),
       iron: new THREE.MeshStandardMaterial({ color: IRON, metalness: 0.5, roughness: 0.55, emissive: "#ff3a12", emissiveIntensity: 0, ...FLAT }),
       copper: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff6a20", emissiveIntensity: 0, ...FLAT }),
+      /** The heat pipes glow on their own: strong emission that bloom picks up, day or night. */
+      pipe: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff4a10", emissiveIntensity: 0, ...FLAT }),
+      /** A soft additive shell around each pipe, so the glow reads even without bloom. */
+      halo: new THREE.MeshBasicMaterial({
+        color: new THREE.Color("#ff8a3a"),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
       snowLip: new THREE.MeshStandardMaterial({ color: SNOW, roughness: 0.9, ...FLAT }),
       frost: new THREE.MeshStandardMaterial({ color: FROST, roughness: 0.7, transparent: true, opacity: 0.85, ...FLAT }),
       crack: new THREE.MeshBasicMaterial({ color: new THREE.Color("#ff5a1f").multiplyScalar(3), toneMapped: false, transparent: true }),
@@ -147,6 +158,7 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
         10,
       ),
       pipe: pipeGeometry(),
+      pipeHalo: pipeGeometry(0.15),
     }),
     [],
   );
@@ -154,8 +166,11 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
   const fire = useMemo(() => new THREE.Color("#ff7a2a"), []);
   const snowColor = useMemo(() => new THREE.Color(SNOW), []);
   const wetStone = useMemo(() => new THREE.Color("#6a7178"), []);
+  const pipeDeep = useMemo(() => new THREE.Color("#ff4a10"), []);
+  const pipeWhite = useMemo(() => new THREE.Color("#ffc27a"), []);
 
   mats.copper.color.set(age ? COPPER_OLD : COPPER);
+  mats.pipe.color.set(age ? COPPER_OLD : COPPER);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
@@ -172,7 +187,14 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
     if (light.current) light.current.intensity = running ? heat * (4 + breath * 0.8) * (presence ? 1.2 : 1) : 0.4;
 
     // Feedback: hot pipes, frost that retreats from the heat, cracks under strain.
-    mats.copper.emissiveIntensity = feedback ? Math.max(0, heat - 2.3) * 0.55 * (0.8 + breath * 0.2) : 0;
+    // 0 at pressure 2, about half at pressure 4, full when surged at high pressure.
+    const glow = feedback ? THREE.MathUtils.clamp((heat - 2.3) / 2.7, 0, 1) : 0;
+    const pulse = 0.85 + breath * 0.15;
+    mats.copper.emissiveIntensity = glow * 0.9 * pulse;
+    mats.pipe.emissiveIntensity = glow * 5 * pulse;
+    mats.pipe.emissive.copy(pipeDeep).lerp(pipeWhite, glow * glow);
+    mats.halo.opacity = glow * 0.5 * pulse;
+    mats.halo.color.copy(pipeDeep).lerp(pipeWhite, glow * 0.6);
     const frostLeft = feedback ? THREE.MathUtils.clamp(1 - (heat - 1.2) / 3.2, 0.12, 1) : 1;
     mats.snowLip.color.copy(wetStone).lerp(snowColor, frostLeft);
     mats.frost.opacity = 0.85 * frostLeft;
@@ -288,7 +310,8 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
         {/* Heat pipes: out of the drum and down into the plinth. */}
         {PIPE_ANGLES.map((a, i) => (
           <group key={`pipe-${i}`} position={[0, body(0), 0]} rotation={[0, a + Math.PI / 2, 0]}>
-            <mesh geometry={geo.pipe} material={mats.copper} castShadow />
+            <mesh geometry={geo.pipe} material={mats.pipe} castShadow />
+            {feedback && <mesh geometry={geo.pipeHalo} material={mats.halo} renderOrder={2} />}
             <mesh position={[DRUM_R + 0.04, GRATE_Y + 0.3, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.12, 0.12, 0.06, 8]} />
               <meshStandardMaterial color={IRON_LIGHT} metalness={0.5} roughness={0.5} {...FLAT} />
