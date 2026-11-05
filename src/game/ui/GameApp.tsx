@@ -65,7 +65,7 @@ export function GameApp() {
         <>
           <CityCanvas />
           <PlayChrome />
-          {import.meta.env.DEV && <KilnLab />}
+          <KilnLab />
         </>
       ) : (
         <Title

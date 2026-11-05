@@ -77,7 +77,6 @@ export function PlayChrome() {
         <div className="relative min-w-0 flex-1">
           {notice && <Notice text={notice} />}
           <SideButtons />
-          <TestModePanel />
           {useGame.getState().panel === "charter" && <CharterBook />}
           {useGame.getState().panel === "survey" && <SurveyBook />}
           {useGame.getState().panel === "chronicle" && <ChronicleBook />}
@@ -87,6 +86,7 @@ export function PlayChrome() {
       </div>
       <Dock />
       <BottomBar />
+      <TestModePanel />
       {sim.pendingEvent && <EventCard />}
       {over && <EndCard />}
     </div>

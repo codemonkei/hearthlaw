@@ -134,11 +134,11 @@ const CRACKS: { a: number; y: number; segs: [number, number, number][] }[] = [
   { a: 5.2, y: GRATE_Y + 0.15, segs: [[0, 0, -0.4], [0.04, -0.1, 0.5], [-0.02, -0.2, -0.5]] },
 ];
 
-export function Kiln(props: { strain: number; pressure: number; surge: boolean; running: boolean }) {
+export function Kiln(props: { strain: number; pressure: number; surge: boolean; running: boolean; testMode: boolean }) {
   const features = useKilnLab((s) => s.features);
   const preview = useKilnLab((s) => s.preview);
-  // The lab can preview states without touching the sim.
-  const { strain, pressure, surge, running } = preview.on
+  // In test mode the lab can preview states without touching the sim; never in normal play.
+  const { strain, pressure, surge, running } = props.testMode && preview.on
     ? { strain: preview.strain, pressure: preview.pressure, surge: preview.surge, running: preview.pressure > 0 }
     : props;
   const { presence, age, mechanism, life, feedback } = features;

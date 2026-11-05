@@ -1,28 +1,41 @@
-import { FlaskConical, X } from "lucide-react";
+import { FlaskConical, GripVertical, X } from "lucide-react";
 import { KILN_FEATURES, useKilnLab } from "@/game/scene/kilnLab";
+import { useGame } from "@/game/store";
+import { useDraggable } from "@/game/ui/useDraggable";
 
 /**
- * Development panel for choosing the Kiln's look: switch candidate features on and off,
- * and preview pressure, surge and strain without touching the game.
+ * Test-mode panel for choosing the Kiln's look: switch candidate features on and off,
+ * and preview pressure, surge and strain without touching the game. Only shown in test mode;
+ * drag it by its title bar.
  */
 export function KilnLab() {
   const { features, preview, open, toggle, setPreview, setOpen } = useKilnLab();
+  useGame((s) => s.rev);
+  const testMode = Boolean(useGame.getState().sim?.testMode);
+  const { ref, style, handleProps } = useDraggable<HTMLElement>("kilnlab");
+  if (!testMode) return null;
   if (!open) {
     return (
-      <button
-        type="button"
-        aria-label="Open Kiln Lab"
-        className="pointer-events-auto absolute top-[210px] left-2 z-20 flex min-h-10 items-center gap-2 rounded-xl border border-line bg-panel px-3 text-sm text-snow"
-        onClick={() => setOpen(true)}
+      <div
+        ref={ref as React.RefObject<HTMLDivElement>}
+        className="pointer-events-auto absolute top-[210px] left-2 z-20 flex min-h-10 items-center rounded-xl border border-line bg-panel text-sm text-snow"
+        style={style}
       >
-        <FlaskConical className="size-4 text-ember" /> Kiln Lab
-      </button>
+        <span {...handleProps} className="flex h-10 items-center pl-2 text-mist" aria-hidden>
+          <GripVertical className="size-4" />
+        </span>
+        <button type="button" aria-label="Open Kiln Lab" className="flex min-h-10 items-center gap-2 pr-3 pl-1" onClick={() => setOpen(true)}>
+          <FlaskConical className="size-4 text-ember" /> Kiln Lab
+        </button>
+      </div>
     );
   }
   return (
-    <section className="pointer-events-auto absolute top-[210px] left-2 z-20 w-56 hl-panel p-3 text-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="hl-kicker">Kiln Lab</p>
+    <section ref={ref} className="pointer-events-auto absolute top-[210px] left-2 z-20 w-56 hl-panel p-3 text-sm" style={style}>
+      <div {...handleProps} className="-mx-1 mb-2 flex items-center justify-between rounded-md px-1 select-none">
+        <p className="hl-kicker flex items-center gap-1">
+          <GripVertical className="size-3.5 text-mist" /> Kiln Lab
+        </p>
         <button type="button" aria-label="Close Kiln Lab" className="rounded-md p-1 text-mist hover:text-snow" onClick={() => setOpen(false)}>
           <X className="size-4" />
         </button>

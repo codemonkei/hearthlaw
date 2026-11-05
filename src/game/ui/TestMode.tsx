@@ -1,6 +1,7 @@
-import { Pause, X } from "lucide-react";
+import { GripVertical, Pause, X } from "lucide-react";
 import { DAY_MINUTES, formatClock, outdoorTemp } from "@/game/sim/content";
 import { useGame } from "@/game/store";
+import { useDraggable } from "@/game/ui/useDraggable";
 
 /** The last minute the scrubber reaches: the end of day 8. */
 const LAST_MINUTE = 8 * DAY_MINUTES - 1;
@@ -23,15 +24,18 @@ export function TestModePanel() {
   const scrubTo = useGame((s) => s.scrubTo);
   const togglePause = useGame((s) => s.togglePause);
   const toggleTestMode = useGame((s) => s.toggleTestMode);
+  const { ref, style, handleProps } = useDraggable<HTMLElement>("testmode");
   if (!sim?.testMode) return null;
   const paused = sim.speed === 0;
   const day = Math.floor(sim.minute / DAY_MINUTES);
   const jump = (d: number, hour: number) => scrubTo(Math.min(LAST_MINUTE, Math.max(0, d * DAY_MINUTES + hour * 60)));
 
   return (
-    <section className="pointer-events-auto absolute right-16 bottom-[180px] z-20 w-72 hl-panel p-3 text-sm">
-      <div className="mb-1 flex items-center justify-between">
-        <p className="hl-kicker">Test mode</p>
+    <section ref={ref} className="pointer-events-auto absolute right-16 bottom-[180px] z-20 w-72 hl-panel p-3 text-sm" style={style}>
+      <div {...handleProps} className="-mx-1 mb-1 flex items-center justify-between rounded-md px-1 select-none">
+        <p className="hl-kicker flex items-center gap-1">
+          <GripVertical className="size-3.5 text-mist" /> Test mode
+        </p>
         <button type="button" aria-label="Turn test mode off" className="rounded-md p-1 text-mist hover:text-snow" onClick={toggleTestMode}>
           <X className="size-4" />
         </button>
@@ -74,7 +78,7 @@ export function TestModePanel() {
           </div>
           <div className="grid grid-cols-3 gap-1">
             <button type="button" className="min-h-8 rounded-md bg-panel-2 text-xs text-snow" onClick={() => scrubTo(Math.max(0, sim.minute - DAY_MINUTES))}>
-              − Day
+              - Day
             </button>
             <button type="button" className="min-h-8 rounded-md bg-panel-2 text-xs text-snow" onClick={() => scrubTo(Math.min(LAST_MINUTE, sim.minute + DAY_MINUTES))}>
               + Day

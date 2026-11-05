@@ -558,6 +558,7 @@ function City() {
           pressure={sim.kiln.pressure}
           surge={sim.kiln.surge}
           running={sim.kiln.running && sim.kiln.pressure > 0}
+          testMode={Boolean(sim.testMode)}
         />
       </group>
     </group>
