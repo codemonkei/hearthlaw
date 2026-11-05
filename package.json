@@ -1,0 +1,36 @@
+{
+  "name": "hearthlaw",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx src/game/sim/smoke.ts"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "lucide-react": "^1.69.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.187.0",
+    "three-stdlib": "^2.36.1",
+    "zod": "^4.6.7",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
