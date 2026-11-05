@@ -32,6 +32,17 @@ function loadFx(): FxQuality {
   return detectFxQuality();
 }
 
+export type Tileset = "classic" | "kenney";
+const TILESET_KEY = "hearthlaw.tileset";
+
+function loadTileset(): Tileset {
+  try {
+    return window.localStorage.getItem(TILESET_KEY) === "kenney" ? "kenney" : "classic";
+  } catch {
+    return "classic";
+  }
+}
+
 export type PanelId = "charter" | "chronicle" | "help" | "survey" | null;
 
 interface Result {
@@ -49,6 +60,8 @@ interface GameStore {
   heat: boolean;
   /** Visual quality: post-processing, shadow resolution, pixel ratio. Presentation only. */
   fx: FxQuality;
+  /** Which look the map tiles use. Experimental: "kenney" is the Hexagon Kit. */
+  tileset: Tileset;
   clauseId: ClauseId | null;
   deals: Partial<Record<CircleId, DealKind | null>>;
   notice: string | null;
@@ -67,6 +80,7 @@ interface GameStore {
   setPanel: (panel: PanelId) => void;
   toggleHeat: () => void;
   toggleFx: () => void;
+  toggleTileset: () => void;
   focusClause: (id: ClauseId | null) => void;
   setDeal: (circle: CircleId, deal: DealKind | null) => void;
   tryPlace: (q: number, r: number) => void;
@@ -120,6 +134,7 @@ export const useGame = create<GameStore>((set, get) => {
     panel: null,
     heat: false,
     fx: loadFx(),
+    tileset: loadTileset(),
     clauseId: null,
     deals: {},
     notice: null,
@@ -232,6 +247,15 @@ export const useGame = create<GameStore>((set, get) => {
         rev: get().rev + 1,
       }),
     toggleHeat: () => set({ heat: !get().heat, rev: get().rev + 1 }),
+    toggleTileset: () => {
+      const tileset: Tileset = get().tileset === "kenney" ? "classic" : "kenney";
+      try {
+        window.localStorage.setItem(TILESET_KEY, tileset);
+      } catch {
+        /* storage blocked — the choice lasts this session */
+      }
+      set({ tileset, rev: get().rev + 1 });
+    },
     toggleFx: () => {
       const fx: FxQuality = get().fx === "high" ? "low" : "high";
       try {

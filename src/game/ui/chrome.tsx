@@ -5,6 +5,7 @@ import {
   FastForward,
   Flame,
   Hammer,
+  Hexagon,
   Leaf,
   Pause,
   Play,
@@ -230,6 +231,8 @@ function SideButtons() {
   const fx = useGame((s) => s.fx);
   const toggleFx = useGame((s) => s.toggleFx);
   const reset = useGame((s) => s.reset);
+  const tileset = useGame((s) => s.tileset);
+  const toggleTileset = useGame((s) => s.toggleTileset);
   const [confirmReset, setConfirmReset] = useState(false);
   const sim = useGame.getState().sim!;
   const Btn = ({
@@ -268,6 +271,9 @@ function SideButtons() {
       </Btn>
       <Btn label={fx === "high" ? "Graphics: high (G)" : "Graphics: low (G)"} onClick={toggleFx} active={fx === "high"}>
         <Sparkles className="size-5" />
+      </Btn>
+      <Btn label={tileset === "kenney" ? "Tileset: Kenney kit (K)" : "Tileset: classic (K)"} onClick={toggleTileset} active={tileset === "kenney"}>
+        <Hexagon className="size-5" />
       </Btn>
       <Btn label="How the cold works" onClick={() => setPanel("help")}>
         <Snowflake className="size-5" />

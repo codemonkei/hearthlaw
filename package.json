@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/game/sim/smoke.ts",
-    "models:nature": "node scripts/build-nature-models.mjs"
+    "models:nature": "node scripts/build-nature-models.mjs",
+    "models:kenney": "node scripts/build-kenney-models.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
@@ -36,6 +37,7 @@
     "adm-zip": "^0.6.1",
     "meshoptimizer": "^1.3.0",
     "obj2gltf": "^3.2.0",
+    "pngjs": "^7.0.0",
     "tailwindcss": "^4.3.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

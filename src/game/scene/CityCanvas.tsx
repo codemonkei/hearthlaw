@@ -37,6 +37,7 @@ import {
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
+import { KenneyTiles, kenneyBuildingFor } from "@/game/scene/Kenney";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -490,6 +491,7 @@ function City() {
   const select = useGame((s) => s.select);
   const sim = useGame.getState().sim;
   const pendingTile = useGame((s) => s.pendingTile);
+  const kenney = useGame((s) => s.tileset) === "kenney";
   const [hoverKey, setHover] = useState<string | null>(null);
   // Touch has no hover: the tile waiting for confirmation stands in for it.
   const hover = hoverKey ?? (pendingTile ? `${pendingTile.q}:${pendingTile.r}` : null);
@@ -512,29 +514,36 @@ function City() {
         <circleGeometry args={[90, 64]} />
         <meshStandardMaterial color="#9eacb8" roughness={1} />
       </mesh>
-      <Nature sim={sim} fallback={<SimpleNature sim={sim} />} />
+      <Nature sim={sim} fallback={<SimpleNature sim={sim} />} tileProps={!kenney} />
+      {kenney && <KenneyTiles sim={sim} />}
       {sim.tiles.map((tile) => {
         const [x, top, z] = hexToWorld(tile.q, tile.r, sim.terrain);
         // Group origin stays at the old slab centre so structure offsets are unchanged.
         const y = top - SLAB_HALF;
         // Solid column from the tile top down past the ground, so nothing floats.
-        const column = top - GROUND_Y + COLUMN_SINK;
+        // With the Kenney kit the column stops just under the kit tile, which supplies the top.
+        const sunk = kenney ? 0.06 : 0;
+        const column = top - sunk - GROUND_Y + COLUMN_SINK;
         const key = `${tile.q}:${tile.r}`;
         const isKiln = tile.q === 0 && tile.r === 0;
         const src = sourceAt(sim, tile.q, tile.r);
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
         const deposit = liveDeposit(tile);
-        const flue = building ? chimney(building.kind) : null;
+        const kit = kenney && building ? kenneyBuildingFor(building.kind) : null;
+        const flue = kit ? { at: [0, 1.2, 0] as [number, number, number], strength: 0.7 } : building ? chimney(building.kind) : null;
         if (flue) smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
-        let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
-        if (heat && !isKiln) color = heatHex(building ? buildingWarmth(sim, building) : w);
+        // `tint` is any state colour (heat, placement fit, hover); the classic tiles paint it
+        // straight onto the column, the Kenney tiles show it on a thin plate above the kit tile.
+        let tint: string | null = null;
+        if (heat && !isKiln) tint = heatHex(building ? buildingWarmth(sim, building) : w);
         const fit: PlacementFit | null = buildKind && !isKiln ? assessPlacement(sim, buildKind, tile.q, tile.r) : null;
         // Occupied tiles just dim; red is kept for open ground this building cannot use.
-        if (fit && fit.fit !== "ok") color = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
+        if (fit && fit.fit !== "ok") tint = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
         const hovered = hover === key;
+        if (kenney && building && building.id === selectedId) tint = "#f2a541";
         if (hovered) {
-          color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
+          tint = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
           const at: [number, number, number] = [x, top + (building || isKiln ? 1.7 : 1.1), z];
           if (fit && buildKind && !building) {
             hoverInfo.label = { at, title: BUILDINGS[buildKind].name, fit: fit.fit, note: fit.note };
@@ -543,11 +552,12 @@ function City() {
             if (info) hoverInfo.label = { at, title: info.title, note: info.detail };
           }
         }
+        const color = kenney ? "#3b3631" : (tint ?? (deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit]));
         return (
           <group key={key} position={[x, y, z]}>
             <mesh
               geometry={hexGeo}
-              position={[0, SLAB_HALF - column / 2, 0]}
+              position={[0, SLAB_HALF - sunk - column / 2, 0]}
               scale={[1, column, 1]}
               rotation={[0, Math.PI / 6, 0]}
               receiveShadow
@@ -571,8 +581,15 @@ function City() {
             >
               <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} />
             </mesh>
-            {!building && (deposit === "peat" || deposit === "scrap") && <DepositProp deposit={deposit} />}
-            {building && (
+            {kenney && tint && (
+              <mesh position={[0, SLAB_HALF + 0.03, 0]} rotation={[0, Math.PI / 6, 0]} renderOrder={1}>
+                <cylinderGeometry args={[HEX_SIZE * 0.97, HEX_SIZE * 0.97, 0.03, 6]} />
+                <meshBasicMaterial color={tint} transparent opacity={0.55} depthWrite={false} />
+              </mesh>
+            )}
+            {/* The kit has no peat: keep our cut seams on its dirt tile. Its rock tile already reads as scrap. */}
+            {!building && (deposit === "peat" || (!kenney && deposit === "scrap")) && <DepositProp deposit={deposit} />}
+            {building && !kit && (
               <Structure kind={building.kind} warmth={buildingWarmth(sim, building)} selected={building.id === selectedId} />
             )}
             {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (
