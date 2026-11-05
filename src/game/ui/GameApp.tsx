@@ -6,6 +6,7 @@ import { unlockAudio } from "@/game/audio";
 import { useGame } from "@/game/store";
 import { PlayChrome } from "@/game/ui/chrome";
 import { KilnLab } from "@/game/ui/KilnLab";
+import { buildShowcase, isShowcase } from "@/game/showcase";
 import { Flame, ScrollText, Landmark } from "lucide-react";
 
 export function GameApp() {
@@ -27,6 +28,9 @@ export function GameApp() {
 
   useEffect(() => {
     boot();
+    if (isShowcase()) {
+      useGame.setState({ sim: buildShowcase(), phase: "play", rev: useGame.getState().rev + 1 });
+    }
     setSaved(hasSave());
     const unbind = bindKeyState();
     const onKey = (e: KeyboardEvent) => {

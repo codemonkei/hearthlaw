@@ -23,8 +23,15 @@ const Envelope = z.object({
     .passthrough(),
 });
 
+let savingEnabled = true;
+
+/** Turn saving off for a tab that must never overwrite the real save (the dev showcase). */
+export function disableSaving(): void {
+  savingEnabled = false;
+}
+
 export function saveSim(sim: SimState): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !savingEnabled) return;
   try {
     window.localStorage.setItem(KEY, JSON.stringify({ schemaVersion: 1, sim }));
   } catch {
@@ -53,6 +60,6 @@ export function hasSave(): boolean {
 }
 
 export function clearSave(): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !savingEnabled) return;
   window.localStorage.removeItem(KEY);
 }

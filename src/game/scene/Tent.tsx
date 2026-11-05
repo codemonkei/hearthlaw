@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { WINDOW_MATERIALS } from "@/game/scene/Atmosphere";
+import { RidgeSnow, roofSnowSlab, SnowHeaps } from "@/game/scene/snow";
 
 /*
  * The canvas tent: a prospector's wall tent. Low canvas walls under a pitched canvas roof on
@@ -98,45 +99,14 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
    * of the slope with a soft, lumpy, wavy lower edge, overhanging the gable ends a little.
    * Shape coordinates: x runs down the slope from the ridge, y along the tent.
    */
-  const roofSnow = useMemo(() => {
-    const make = (phase: number) => {
-      const half = L / 2 + 0.04;
-      const cover = slope.length * 0.56;
-      const edge = (v: number) =>
-        cover +
-        0.05 * Math.sin(v * 8.5 + phase) +
-        0.03 * Math.sin(v * 21 + phase * 2.3) +
-        0.025 * Math.max(0, Math.sin(v * 37 + phase * 4.1)); // little sagging tongues
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.01, -half);
-      shape.lineTo(-0.01, half);
-      const steps = 18;
-      for (let i = 0; i <= steps; i++) {
-        const v = half - (i / steps) * 2 * half;
-        shape.lineTo(edge(v), v);
-      }
-      shape.closePath();
-      const g = new THREE.ExtrudeGeometry(shape, {
-        depth: 0.022,
-        bevelEnabled: true,
-        bevelThickness: 0.014,
-        bevelSize: 0.016,
-        bevelSegments: 1,
-        curveSegments: 1,
-      });
-      return g;
-    };
-    return { right: make(0.7), left: make(2.9) };
-  }, [slope.length]);
-  /** Lumps of snow along the ridge where the two slabs meet. */
-  const ridgeLumps = useMemo(
-    () =>
-      Array.from({ length: 6 }, (_, i) => {
-        const z = -L / 2 + 0.02 + (i / 5) * (L - 0.04);
-        return { z, r: 0.055 + ((i * 7) % 3) * 0.012, turn: i * 1.1 };
-      }),
-    [],
+  const roofSnow = useMemo(
+    () => ({
+      right: roofSnowSlab(L, slope.length * 0.56, 0.7),
+      left: roofSnowSlab(L, slope.length * 0.56, 2.9),
+    }),
+    [slope.length],
   );
+
   /** Soft heaps of snow at the corners and along the walls. */
   const drifts = useMemo(
     () =>
@@ -266,18 +236,8 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
       </mesh>
 
       {/* Snow drifted against the walls, a crate and firewood by the door. */}
-      {ridgeLumps.map((l, i) => (
-        <mesh key={`ridge-snow-${i}`} position={[0, RIDGE + 0.03, l.z]} rotation={[0, l.turn, 0]} scale={[1.3, 0.55, 1.1]} castShadow>
-          <icosahedronGeometry args={[l.r, 0]} />
-          <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
-        </mesh>
-      ))}
-      {drifts.map(([x, z, r], i) => (
-        <mesh key={`drift-${i}`} position={[x, r * 0.15, z]} rotation={[0, i * 1.3, 0]} scale={[1.25, 0.45, 1]} castShadow receiveShadow>
-          <icosahedronGeometry args={[r, 1]} />
-          <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
-        </mesh>
-      ))}
+      <RidgeSnow y={RIDGE + 0.03} length={L} />
+      <SnowHeaps at={drifts} />
       <mesh position={[0.32, 0.06, L / 2 + 0.16]} rotation={[0, 0.4, 0]} castShadow>
         <boxGeometry args={[0.14, 0.12, 0.12]} />
         <meshStandardMaterial color="#6b4a32" roughness={1} {...FLAT} />

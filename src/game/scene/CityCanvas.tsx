@@ -38,6 +38,7 @@ import {
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
 import { CanvasTent, tentFlue } from "@/game/scene/Tent";
+import { hutFlue, TimberHut } from "@/game/scene/Hut";
 import { Kiln, kilnStackTop } from "@/game/scene/Kiln";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
@@ -144,7 +145,7 @@ function Window({ position, warmth }: { position: [number, number, number]; warm
 function chimney(kind: BuildingKind): { at: [number, number, number]; strength: number } | null {
   if (kind === "vent") return null;
   if (kind === "tent") return { at: tentFlue(), strength: 0.75 };
-  if (kind === "hut") return { at: [0.72 * 0.25, 0.95, 0], strength: 0.7 };
+  if (kind === "hut") return { at: hutFlue(), strength: 0.8 };
   if (kind === "longhouse") return { at: [1.15 * 0.25, 0.95, 0], strength: 0.9 };
   const tall = kind === "survey" || kind === "infirmary";
   const strength = kind === "ironworks" || kind === "mess" ? 1 : tall ? 0.6 : 0.35;
@@ -156,8 +157,9 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
   const timber = "#6b4632";
   const stone = "#3b4a5c";
   if (kind === "tent") return <CanvasTent warmth={warmth} selected={selected} />;
-  if (kind === "hut" || kind === "longhouse") {
-    const wide = kind === "longhouse" ? 1.15 : 0.72;
+  if (kind === "hut") return <TimberHut warmth={warmth} selected={selected} />;
+  if (kind === "longhouse") {
+    const wide = 1.15;
     return (
       <group>
         <mesh position={[0, 0.32, 0]} castShadow>
