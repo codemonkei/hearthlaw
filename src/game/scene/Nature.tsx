@@ -40,9 +40,15 @@ const PALETTE: Record<string, { color: string; roughness: number }> = {
   Black: { color: "#1d1a18", roughness: 1 },
 };
 
-type Part = { geometry: THREE.BufferGeometry; material: THREE.Material };
+/**
+ * One mesh of a model. `local` is the mesh's transform relative to the model root and is
+ * applied per instance, never baked into the geometry: the GLB is meshopt-quantized, so
+ * positions are normalized int16 in [-1, 1] with the real size held in the node scale.
+ * Baking that scale into the attribute would clamp it and slice the model.
+ */
+type Part = { geometry: THREE.BufferGeometry; material: THREE.Material; local: THREE.Matrix4 };
 
-/** Bake each model's node transforms into its geometry and swap materials for our palette. */
+/** Collect each model's meshes with their local transforms, and swap materials for our palette. */
 function useParts(): Map<string, Part[]> {
   const { scene } = useGLTF(URL);
   return useMemo(() => {
@@ -64,10 +70,12 @@ function useParts(): Map<string, Part[]> {
       root.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
-        const g = mesh.geometry.clone();
-        g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
         const src = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
-        parts.push({ geometry: g, material: material(src.name) });
+        parts.push({
+          geometry: mesh.geometry,
+          material: material(src.name),
+          local: new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld),
+        });
       });
       out.set(root.name, parts);
     }
@@ -76,15 +84,15 @@ function useParts(): Map<string, Part[]> {
 }
 
 function Instanced({ parts, items }: { parts: Part[]; items: Placement[] }) {
-  const matrices = useMemo(() => {
-    const m = new THREE.Matrix4();
+  const placed = useMemo(() => {
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     return items.map((it) => {
       q.setFromAxisAngle(up, it.rotY);
-      return m.compose(new THREE.Vector3(...it.pos), q, new THREE.Vector3(it.scale, it.scale, it.scale)).clone();
+      return new THREE.Matrix4().compose(new THREE.Vector3(...it.pos), q, new THREE.Vector3(it.scale, it.scale, it.scale));
     });
   }, [items]);
+  const scratch = useMemo(() => new THREE.Matrix4(), []);
   return (
     <>
       {parts.map((p, i) => (
@@ -95,7 +103,7 @@ function Instanced({ parts, items }: { parts: Part[]; items: Placement[] }) {
           receiveShadow
           ref={(im) => {
             if (!im) return;
-            matrices.forEach((mx, k) => im.setMatrixAt(k, mx));
+            placed.forEach((mx, k) => im.setMatrixAt(k, scratch.multiplyMatrices(mx, p.local)));
             im.instanceMatrix.needsUpdate = true;
             im.computeBoundingSphere();
           }}
