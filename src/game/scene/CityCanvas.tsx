@@ -26,7 +26,17 @@ const SLAB_HALF = 0.1;
 /** How far each tile column reaches below the ground plane. */
 const COLUMN_SINK = 0.3;
 import { useGame } from "@/game/store";
-import { Embers, GroundMist, PostFx, SceneLighting, Smoke, type SmokeEmitter } from "@/game/scene/Atmosphere";
+import {
+  Embers,
+  GroundMist,
+  PostFx,
+  SceneLighting,
+  Smoke,
+  Snowfall,
+  WINDOW_MATERIALS,
+  type SmokeEmitter,
+} from "@/game/scene/Atmosphere";
+import { Nature } from "@/game/scene/Nature";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -118,41 +128,6 @@ function CameraRig() {
   );
 }
 
-function Snow() {
-  const ref = useRef<THREE.Points>(null);
-  const geo = useMemo(() => {
-    const count = 420;
-    const arr = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 46;
-      arr[i * 3 + 1] = Math.random() * 18 + 1;
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 46;
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
-    return g;
-  }, []);
-  useFrame((_, delta) => {
-    const attr = ref.current?.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
-    if (!attr) return;
-    const d = Math.min(delta, 0.1);
-    for (let i = 0; i < attr.count; i++) {
-      let y = attr.getY(i) - d * (1.1 + (i % 7) * 0.18);
-      if (y < 0) y = 16 + (i % 5);
-      attr.setY(i, y);
-      let x = attr.getX(i) + d * (0.9 + (i % 5) * 0.25);
-      if (x > 23) x = -23;
-      attr.setX(i, x);
-    }
-    attr.needsUpdate = true;
-  });
-  return (
-    <points ref={ref} geometry={geo}>
-      <pointsMaterial color="#e8eef2" size={0.055} transparent opacity={0.75} sizeAttenuation />
-    </points>
-  );
-}
-
 function Kiln({
   strain,
   pressure,
@@ -216,9 +191,8 @@ function Kiln({
 /** A lit window: bright amber when the room is warm, a dull ember when it is not. */
 function Window({ position, warmth }: { position: [number, number, number]; warmth: number }) {
   return (
-    <mesh position={position}>
+    <mesh position={position} material={warmth >= 1 ? WINDOW_MATERIALS.warm : warmth >= 0 ? WINDOW_MATERIALS.mild : WINDOW_MATERIALS.cold}>
       <boxGeometry args={[0.15, 0.12, 0.02]} />
-      <meshStandardMaterial color="#2a1a10" emissive="#ffb15c" emissiveIntensity={warmth >= 1 ? 3 : warmth >= 0 ? 1.4 : 0.4} />
     </mesh>
   );
 }
@@ -471,6 +445,42 @@ function HoverLabel({ at, title, fit, note }: Label) {
   );
 }
 
+/** Plain shapes for groves, lichen and the cirque, used while the nature models load (or if they cannot). */
+function SimpleNature({ sim }: { sim: SimState }) {
+  return (
+    <group>
+      {Array.from({ length: 14 }).map((_, i) => {
+        const a = (i / 14) * Math.PI * 2;
+        const rad = 16 + (i % 3) * 0.8;
+        return (
+          <mesh key={i} position={[Math.cos(a) * rad, 0.75, Math.sin(a) * rad]} castShadow>
+            <coneGeometry args={[1.4 + (i % 4) * 0.35, 3.2 + (i % 5), 5]} />
+            <meshStandardMaterial color={i % 2 ? "#c5d0da" : "#8ea0b0"} roughness={0.95} />
+          </mesh>
+        );
+      })}
+      {sim.tiles.map((t) => {
+        const deposit = liveDeposit(t);
+        if (t.buildingId != null || (deposit !== "timber" && deposit !== "lichen")) return null;
+        const [x, top, z] = hexToWorld(t.q, t.r, sim.terrain);
+        return (
+          <group key={`${t.q}:${t.r}`} position={[x, top - SLAB_HALF, z]}>
+            <DepositProp deposit={deposit} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Fractional hour and outdoor temperature for the sky, read every frame. */
+function skyClock() {
+  const sim = useGame.getState().sim;
+  if (!sim) return null;
+  const minute = ((sim.minute % 1440) + 1440) % 1440;
+  return { hour: minute / 60, tempC: outdoorTemp(sim.minute) };
+}
+
 function City() {
   const rev = useGame((s) => s.rev);
   const heat = useGame((s) => s.heat);
@@ -502,16 +512,7 @@ function City() {
         <circleGeometry args={[90, 64]} />
         <meshStandardMaterial color="#9eacb8" roughness={1} />
       </mesh>
-      {Array.from({ length: 14 }).map((_, i) => {
-        const a = (i / 14) * Math.PI * 2;
-        const rad = 16 + (i % 3) * 0.8;
-        return (
-          <mesh key={i} position={[Math.cos(a) * rad, 0.75, Math.sin(a) * rad]} castShadow>
-            <coneGeometry args={[1.4 + (i % 4) * 0.35, 3.2 + (i % 5), 5]} />
-            <meshStandardMaterial color={i % 2 ? "#c5d0da" : "#8ea0b0"} roughness={0.95} />
-          </mesh>
-        );
-      })}
+      <Nature sim={sim} fallback={<SimpleNature sim={sim} />} />
       {sim.tiles.map((tile) => {
         const [x, top, z] = hexToWorld(tile.q, tile.r, sim.terrain);
         // Group origin stays at the old slab centre so structure offsets are unchanged.
@@ -570,7 +571,7 @@ function City() {
             >
               <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} />
             </mesh>
-            {!building && <DepositProp deposit={deposit} />}
+            {!building && (deposit === "peat" || deposit === "scrap") && <DepositProp deposit={deposit} />}
             {building && (
               <Structure kind={building.kind} warmth={buildingWarmth(sim, building)} selected={building.id === selectedId} />
             )}
@@ -610,9 +611,9 @@ export function CityCanvas() {
       gl={{ antialias: fx === "low", powerPreference: "high-performance", stencil: false }}
       onPointerMissed={() => useGame.getState().select(null)}
     >
-      <SceneLighting quality={fx} />
+      <SceneLighting quality={fx} clock={skyClock} />
       <City />
-      <Snow />
+      <Snowfall />
       <GroundMist />
       <CameraRig />
       <PostFx quality={fx} />

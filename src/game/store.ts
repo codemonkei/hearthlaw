@@ -288,3 +288,8 @@ export const useGame = create<GameStore>((set, get) => {
     dismissNotice: () => set({ notice: null, rev: get().rev + 1 }),
   };
 });
+
+// Dev-only handle for inspecting and scrubbing the game from the browser console.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __hearthlaw: typeof useGame }).__hearthlaw = useGame;
+}

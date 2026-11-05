@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/game/sim/smoke.ts"
+    "smoke": "tsx src/game/sim/smoke.ts",
+    "models:nature": "node scripts/build-nature-models.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
@@ -23,12 +24,18 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@tailwindcss/vite": "^4.3.4",
     "@types/node": "^26.6.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.2.1",
+    "adm-zip": "^0.6.1",
+    "meshoptimizer": "^1.3.0",
+    "obj2gltf": "^3.2.0",
     "tailwindcss": "^4.3.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
