@@ -320,11 +320,20 @@ function makeTiles(sim: SimState): Tile[] {
       left--;
     }
   };
-  take((t) => hexDist(t.q, t.r) >= 2, 7, "peat", 900);
-  take((t) => hexDist(t.q, t.r) >= 2, 6, "timber", 700);
-  take((t) => hexDist(t.q, t.r) >= 2, 4, "scrap", 320);
-  take((t) => hexDist(t.q, t.r) >= 2, 4, "lichen", 640);
+  take((t) => hexDist(t.q, t.r) >= 2, 7, "peat", DEPOSIT_START.peat);
+  take((t) => hexDist(t.q, t.r) >= 2, 6, "timber", DEPOSIT_START.timber);
+  take((t) => hexDist(t.q, t.r) >= 2, 4, "scrap", DEPOSIT_START.scrap);
+  take((t) => hexDist(t.q, t.r) >= 2, 4, "lichen", DEPOSIT_START.lichen);
   return tiles;
+}
+
+/** How much each kind of deposit holds when the map is made. */
+export const DEPOSIT_START: Record<Exclude<Tile["deposit"], "none">, number> = { peat: 900, timber: 700, scrap: 320, lichen: 640 };
+
+/** How full a tile's deposit still is, 0 (worked out) to 1 (untouched). */
+export function depositFill(tile: Tile): number {
+  if (tile.deposit === "none") return 0;
+  return Math.max(0, Math.min(1, tile.depositLeft / DEPOSIT_START[tile.deposit]));
 }
 
 /** A tile's deposit, or "none" once it has been worked out. */

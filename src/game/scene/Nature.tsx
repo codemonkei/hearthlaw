@@ -3,7 +3,8 @@ import { Component, Suspense, useMemo, type ReactNode } from "react";
 import * as THREE from "three";
 import { FACING } from "@/game/scene/parts";
 import { LODGE_GROVE } from "@/game/scene/WoodLodge";
-import { liveDeposit } from "@/game/sim/engine";
+import { depositSlot, GROVE_SLOTS, LICHEN_ROCK_SLOTS } from "@/game/scene/Deposits";
+import { depositFill, liveDeposit } from "@/game/sim/engine";
 import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
 import type { SimState } from "@/game/sim/types";
 
@@ -163,23 +164,22 @@ function placements(sim: SimState): Map<NatureModel, Placement[]> {
       }
       continue;
     }
-    const live = liveDeposit(t);
-    if (live === "timber") {
-      for (let k = 0; k < 3; k++) {
-        const [px, pz] = onTile(x, z, t.q, t.r, k, 0.55);
-        add(pick(PINES, hash(t.q, t.r, k)), { pos: [px, top, pz], rotY: hash(t.q, t.r, k + 9) * 6.28, scale: 0.36 + hash(t.q, t.r, k + 3) * 0.12 });
-      }
-    } else if (t.deposit === "timber") {
-      // A worked-out grove: stumps where the pines stood.
-      for (let k = 0; k < 2; k++) {
-        const [px, pz] = onTile(x, z, t.q, t.r, k, 0.5);
-        add("TreeStump_Snow", { pos: [px, top, pz], rotY: hash(t.q, t.r, k + 5) * 6.28, scale: 0.28 });
-      }
-    } else if (live === "lichen") {
-      for (let k = 0; k < 3; k++) {
-        const [px, pz] = onTile(x, z, t.q, t.r, k, 0.5);
-        add(pick(MOSS_ROCKS, hash(t.q, t.r, k + 11)), { pos: [px, top - 0.02, pz], rotY: hash(t.q, t.r, k + 13) * 6.28, scale: 0.32 + hash(t.q, t.r, k + 17) * 0.18 });
-      }
+    // Groves thin as they are felled: pines stand in fixed slots, stumps take the felled ones.
+    if (t.deposit === "timber") {
+      const standing = liveDeposit(t) === "timber" ? Math.max(1, Math.ceil(depositFill(t) * GROVE_SLOTS.length)) : 0;
+      GROVE_SLOTS.forEach((slot, k) => {
+        const [dx, dz] = depositSlot(t.q, t.r, slot);
+        const pos: [number, number, number] = [x + dx, top, z + dz];
+        if (k < standing) add(pick(PINES, hash(t.q, t.r, k)), { pos, rotY: hash(t.q, t.r, k + 9) * 6.28, scale: 0.3 + hash(t.q, t.r, k + 3) * 0.12 });
+        else add("TreeStump_Snow", { pos, rotY: hash(t.q, t.r, k + 5) * 6.28, scale: 0.26 });
+      });
+    } else if (t.deposit === "lichen") {
+      // Lichen-grown boulders while the patch lasts, bare snowy ones once it is scraped.
+      const live = liveDeposit(t) === "lichen";
+      LICHEN_ROCK_SLOTS.forEach((slot, k) => {
+        const [dx, dz] = depositSlot(t.q, t.r, slot);
+        add(pick(live ? MOSS_ROCKS : SNOW_ROCKS, hash(t.q, t.r, k + 11)), { pos: [x + dx, top - 0.02, z + dz], rotY: hash(t.q, t.r, k + 13) * 6.28, scale: 0.3 + hash(t.q, t.r, k + 17) * 0.14 });
+      });
     }
   }
 

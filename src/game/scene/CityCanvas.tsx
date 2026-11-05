@@ -8,6 +8,7 @@ import { BUILDINGS, outdoorBand, outdoorTemp } from "@/game/sim/content";
 import {
   assessPlacement,
   buildingWarmth,
+  depositFill,
   describeTile,
   heatLevel,
   inWarmth,
@@ -51,6 +52,7 @@ import { Infirmary, infirmaryFlue, infirmaryHeaterFlue } from "@/game/scene/Infi
 import { SurveyHall, surveyFlue, surveyHeaterFlue } from "@/game/scene/SurveyHall";
 import { Depot, depotHeaterFlue } from "@/game/scene/Depot";
 import { RelayVent, ventFlue } from "@/game/scene/RelayVent";
+import { DepositTile } from "@/game/scene/Deposits";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
 const _fwd = new THREE.Vector3();
@@ -395,7 +397,7 @@ function SimpleNature({ sim }: { sim: SimState }) {
       })}
       {sim.tiles.map((t) => {
         const deposit = liveDeposit(t);
-        if (t.buildingId != null || (deposit !== "timber" && deposit !== "lichen")) return null;
+        if (t.buildingId != null || deposit !== "timber") return null;
         const [x, top, z] = hexToWorld(t.q, t.r, sim.terrain);
         return (
           <group key={`${t.q}:${t.r}`} position={[x, top - SLAB_HALF, z]}>
@@ -548,7 +550,7 @@ function City() {
             >
               <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} />
             </mesh>
-            {!building && (deposit === "peat" || deposit === "scrap") && <DepositProp deposit={deposit} />}
+            {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
               <Structure
                 kind={building.kind}
