@@ -1,6 +1,6 @@
 import { BUILDINGS } from "@/game/sim/content";
 import { createGame, placeBuilding, upgradeBuilding } from "@/game/sim/engine";
-import { hexDist } from "@/game/sim/hex";
+import { hexDist, hexToWorld } from "@/game/sim/hex";
 import { disableSaving } from "@/game/sim/save";
 import type { BuildingKind, SimState } from "@/game/sim/types";
 
@@ -27,8 +27,14 @@ export function buildShowcase(): SimState {
   sim.resources.timber = 5000;
   sim.resources.iron = 5000;
 
+  // Fill the tiles on the camera's side of the Kiln first, so showcased buildings face the viewer.
+  const towardCamera = (q: number, r: number) => {
+    const [x, , z] = hexToWorld(q, r, sim.terrain);
+    return x + z;
+  };
+  const tiles = [...sim.tiles].sort((a, b) => towardCamera(b.q, b.r) - towardCamera(a.q, a.r));
   const free = (pred: (q: number, r: number, deposit: string) => boolean) =>
-    sim.tiles.find((t) => t.buildingId == null && !(t.q === 0 && t.r === 0) && pred(t.q, t.r, t.deposit));
+    tiles.find((t) => t.buildingId == null && !(t.q === 0 && t.r === 0) && pred(t.q, t.r, t.deposit));
   const put = (kind: BuildingKind, pred: (q: number, r: number, deposit: string) => boolean) => {
     const t = free(pred);
     if (t) placeBuilding(sim, kind, t.q, t.r);

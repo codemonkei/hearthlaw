@@ -39,6 +39,7 @@ import {
 import { Nature } from "@/game/scene/Nature";
 import { CanvasTent, tentFlue } from "@/game/scene/Tent";
 import { hutFlue, TimberHut } from "@/game/scene/Hut";
+import { Longhouse, longhouseFlues } from "@/game/scene/Longhouse";
 import { Kiln, kilnStackTop } from "@/game/scene/Kiln";
 import { useKilnLab } from "@/game/scene/kilnLab";
 
@@ -141,45 +142,30 @@ function Window({ position, warmth }: { position: [number, number, number]; warm
   );
 }
 
-/** Where each building's chimney mouth sits, relative to its tile group, and how thick its smoke is. */
-function chimney(kind: BuildingKind): { at: [number, number, number]; strength: number } | null {
-  if (kind === "vent") return null;
-  if (kind === "tent") return { at: tentFlue(), strength: 0.75 };
-  if (kind === "hut") return { at: hutFlue(), strength: 0.8 };
-  if (kind === "longhouse") return { at: [1.15 * 0.25, 0.95, 0], strength: 0.9 };
+type Flue = { at: [number, number, number]; strength: number };
+
+/** Where each building's chimney mouths sit, relative to its tile group, and how thick their smoke is. */
+function chimneys(kind: BuildingKind): Flue[] {
+  if (kind === "vent") return [];
+  if (kind === "tent") return [{ at: tentFlue(), strength: 0.75 }];
+  if (kind === "hut") return [{ at: hutFlue(), strength: 0.8 }];
+  if (kind === "longhouse") {
+    const [stack, vent] = longhouseFlues();
+    return [
+      { at: stack!, strength: 0.9 },
+      { at: vent!, strength: 0.6 },
+    ];
+  }
   const tall = kind === "survey" || kind === "infirmary";
   const strength = kind === "ironworks" || kind === "mess" ? 1 : tall ? 0.6 : 0.35;
-  return { at: [0.22, tall ? 1.32 : 0.97, 0], strength };
+  return [{ at: [0.22, tall ? 1.32 : 0.97, 0], strength }];
 }
 
 function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: number; selected: boolean }) {
-  const roof = warmth >= 1 ? "#f2a541" : "#e8eef2";
-  const timber = "#6b4632";
   const stone = "#3b4a5c";
   if (kind === "tent") return <CanvasTent warmth={warmth} selected={selected} />;
   if (kind === "hut") return <TimberHut warmth={warmth} selected={selected} />;
-  if (kind === "longhouse") {
-    const wide = 1.15;
-    return (
-      <group>
-        <mesh position={[0, 0.32, 0]} castShadow>
-          <boxGeometry args={[wide, 0.48, 0.62]} />
-          <meshStandardMaterial color={timber} roughness={0.8} />
-        </mesh>
-        <mesh position={[0, 0.68, 0]} rotation={[0, 0, 0]} castShadow>
-          <coneGeometry args={[kind === "longhouse" ? 0.78 : 0.52, 0.42, 4]} />
-          <meshStandardMaterial color={roof} roughness={0.7} />
-        </mesh>
-        <mesh position={[wide * 0.25, 0.78, 0]}>
-          <boxGeometry args={[0.08, 0.28, 0.08]} />
-          <meshStandardMaterial color={stone} />
-        </mesh>
-        {(kind === "longhouse" ? [-0.3, 0.3] : [0]).map((wx) => (
-          <Window key={wx} position={[wx, 0.3, 0.315]} warmth={warmth} />
-        ))}
-      </group>
-    );
-  }
+  if (kind === "longhouse") return <Longhouse warmth={warmth} selected={selected} />;
   if (kind === "vent") {
     return (
       <group>
@@ -503,8 +489,9 @@ function City() {
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
         const deposit = liveDeposit(tile);
-        const flue = building ? chimney(building.kind) : null;
-        if (flue) smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
+        for (const flue of building ? chimneys(building.kind) : []) {
+          smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
+        }
         let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
         if (heat && !isKiln) color = heatHex(building ? buildingWarmth(sim, building) : w);
         const fit: PlacementFit | null = buildKind && !isKiln ? assessPlacement(sim, buildKind, tile.q, tile.r) : null;
