@@ -27,10 +27,15 @@ function hslToRgb(h, s, l) {
 }
 
 /** Grade one palette pixel toward a cold, worn, low-saturation winter. */
-export function harsh(r, g, b) {
+export function harsh(r, g, b, opts = {}) {
   let [h, s, l] = rgbToHsl(r / 255, g / 255, b / 255);
   const warm = h < 50 || h > 320;
-  if (s < 0.12 && l > 0.75) {
+  if (opts.greenToBrown && h >= 75 && h < 178 && s > 0.2) {
+    // Green and teal roofs, doors and shutters: weathered timber brown.
+    h = 24;
+    s = 0.34;
+    l = 0.18 + l * 0.32;
+  } else if (s < 0.12 && l > 0.75) {
     // Snow and frost: cold, a little dimmer so sunlit ground does not glare.
     h = 212;
     s = 0.1;
@@ -63,10 +68,10 @@ export function harsh(r, g, b) {
   return [Math.round(rr * 255), Math.round(gg * 255), Math.round(bb * 255)];
 }
 
-export function gradePalette(pngBuffer) {
+export function gradePalette(pngBuffer, opts = {}) {
   const png = PNG.sync.read(pngBuffer);
   for (let i = 0; i < png.data.length; i += 4) {
-    const [r, g, b] = harsh(png.data[i], png.data[i + 1], png.data[i + 2]);
+    const [r, g, b] = harsh(png.data[i], png.data[i + 1], png.data[i + 2], opts);
     png.data[i] = r;
     png.data[i + 1] = g;
     png.data[i + 2] = b;
@@ -75,9 +80,9 @@ export function gradePalette(pngBuffer) {
 }
 
 /** Grade a glTF baseColorFactor (linear RGBA) the same way. */
-export function gradeFactor([r, g, b, a]) {
+export function gradeFactor([r, g, b, a], opts = {}) {
   const toS = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
   const toL = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-  const [rr, gg, bb] = harsh(toS(r) * 255, toS(g) * 255, toS(b) * 255);
+  const [rr, gg, bb] = harsh(toS(r) * 255, toS(g) * 255, toS(b) * 255, opts);
   return [toL(rr / 255), toL(gg / 255), toL(bb / 255), a];
 }

@@ -25,6 +25,9 @@ export const weather = {
   storm: 0,
 };
 
+/** How much snow lies on roofs and ledges, 0..1. A shader uniform shared by every building material. */
+export const SNOW_COVER = { value: 0.25 };
+
 /** Three window states shared by every building, so night can brighten them all at once. */
 export const WINDOW_MATERIALS = {
   warm: new THREE.MeshStandardMaterial({ color: "#2a1a10", emissive: "#ffb15c", emissiveIntensity: 3 }),
@@ -195,6 +198,9 @@ export function SceneLighting({
       moon.current.position.copy(_moonDir).multiplyScalar(70);
       (moon.current.material as THREE.MeshBasicMaterial).opacity = THREE.MathUtils.smoothstep(-h, -0.05, 0.05) * (1 - S);
     }
+
+    // A dusting in calm weather; the storm buries the roofs.
+    SNOW_COVER.value = 0.22 + S * 0.73;
 
     // Lit windows matter most in the dark.
     const glow = 0.45 + (1 - D) * 0.85;

@@ -21,6 +21,9 @@ import { gradeFactor, gradePalette } from "./lib/winter-palette.mjs";
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip");
 
+/** Town parts: green and teal roofs become timber brown; snow is added live by a shader. */
+const GRADE = { greenToBrown: true };
+
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1")), "..");
 const OUT = path.join(ROOT, "public", "models", "town.glb");
 
@@ -31,7 +34,7 @@ const KITS = [
     dir: "GLB format",
     parts: [
       "cabin-wall", "cabin-wall-low", "cabin-wall-roof-center", "cabin-corner-logs", "cabin-doorway",
-      "cabin-window-a", "cabin-window-large", "cabin-roof-snow-point", "cabin-roof-top", "floor-wood-snow",
+      "cabin-window-a", "cabin-window-large", "cabin-roof-point", "cabin-roof-top", "floor-wood-snow",
       "floor-stone", "snow-pile", "snow-bunker", "sled", "sled-long", "lantern", "bench",
       "train-locomotive", "train-tender", "train-wagon", "train-wagon-logs", "train-wagon-flat",
       "trainset-rail-straight", "rocks-medium",
@@ -96,11 +99,11 @@ async function main() {
       // Grade colours in the source document before merging.
       for (const t of src.getRoot().listTextures()) {
         if (gradedImages.has(t)) continue;
-        t.setImage(new Uint8Array(gradePalette(Buffer.from(t.getImage())))).setMimeType("image/png");
+        t.setImage(new Uint8Array(gradePalette(Buffer.from(t.getImage()), GRADE))).setMimeType("image/png");
         gradedImages.add(t);
       }
       for (const m of src.getRoot().listMaterials()) {
-        if (!m.getBaseColorTexture()) m.setBaseColorFactor(gradeFactor(m.getBaseColorFactor()));
+        if (!m.getBaseColorTexture()) m.setBaseColorFactor(gradeFactor(m.getBaseColorFactor(), GRADE));
         m.setMetallicFactor(0);
       }
 

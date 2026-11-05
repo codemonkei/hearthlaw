@@ -1,7 +1,7 @@
 import { useGLTF } from "@react-three/drei";
 import { Suspense, type ReactNode } from "react";
 import * as THREE from "three";
-import { Smoke, WINDOW_MATERIALS, type SmokeEmitter } from "@/game/scene/Atmosphere";
+import { SNOW_COVER, Smoke, WINDOW_MATERIALS, type SmokeEmitter } from "@/game/scene/Atmosphere";
 import { hash, ModelFallback, PlacedModels, useModelParts, type Placement } from "@/game/scene/models";
 import { buildingWarmth } from "@/game/sim/engine";
 import { hexToWorld } from "@/game/sim/hex";
@@ -57,7 +57,7 @@ function corners(x0: number, x1: number, z0: number, z1: number): PartSpec[] {
 function snowRoof(len: number, y = 1): PartSpec[] {
   const half = (len - 1) / 2;
   return [
-    ["holiday/cabin-roof-snow-point", 0, y, 0, 0, [1, 1, (len + 0.4) / 1.4]],
+    ["holiday/cabin-roof-point", 0, y, 0, 0, [1, 1, (len + 0.4) / 1.4]],
     ["holiday/cabin-wall-roof-center", 0, y, half, 0],
     ["holiday/cabin-wall-roof-center", 0, y, -half, 180],
   ];
@@ -67,7 +67,7 @@ const BLUEPRINTS: Record<BuildingKind, Blueprint> = {
   tent: {
     unit: 0.6,
     parts: [
-      ["holiday/cabin-roof-snow-point", 0, 0, 0, 0, 0.85],
+      ["holiday/cabin-roof-point", 0, 0, 0, 0, 0.85],
       ["holiday/sled", 0.85, 0, 0.3, 20, 0.8],
     ],
   },
@@ -137,7 +137,7 @@ const BLUEPRINTS: Record<BuildingKind, Blueprint> = {
       wall("cabin-wall-low", 0, 0, "back"),
       wall("cabin-wall-low", 0, 0, "left"),
       wall("cabin-wall-low", 0, 0, "right"),
-      ["holiday/cabin-roof-snow-point", 0, 0.4, 0, 0, 0.95],
+      ["holiday/cabin-roof-point", 0, 0.4, 0, 0, 0.95],
       ["fantasy/poles-horizontal", 0.55, 0, 0, 0, 0.8],
       ["holiday/sled-long", -0.95, 0, 0.2, 10, 0.8],
     ],
@@ -356,12 +356,57 @@ function Windows({ windows }: { windows: TownLayout["windows"] }) {
   );
 }
 
-/** Harsh, faceted, non-metallic: the space kit's chrome reads as weathered iron. */
+/**
+ * Snow on every upward-facing surface, in patches. `SNOW_COVER` (0..1) is driven by the storm:
+ * a light dusting in calm weather, nearly white roofs at the height of a blizzard.
+ */
+function addSnowCover(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSnowCover = SNOW_COVER;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vSnowWorld;")
+      .replace(
+        "#include <worldpos_vertex>",
+        `#include <worldpos_vertex>
+        vec4 snowWorld = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          snowWorld = instanceMatrix * snowWorld;
+        #endif
+        vSnowWorld = (modelMatrix * snowWorld).xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uSnowCover;\nvarying vec3 vSnowWorld;")
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+        {
+          float up = inverseTransformDirection(normal, viewMatrix).y;
+          float facing = smoothstep(0.45, 0.75, up);
+          // Soft drifts: smooth value noise in world space, so snow settles unevenly.
+          vec2 sp = vSnowWorld.xz * 5.0 + vSnowWorld.y * 1.7;
+          vec2 i0 = floor(sp);
+          vec2 f = fract(sp);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = fract(sin(dot(i0, vec2(12.9898, 78.233))) * 43758.5453);
+          float b = fract(sin(dot(i0 + vec2(1.0, 0.0), vec2(12.9898, 78.233))) * 43758.5453);
+          float c = fract(sin(dot(i0 + vec2(0.0, 1.0), vec2(12.9898, 78.233))) * 43758.5453);
+          float d = fract(sin(dot(i0 + vec2(1.0, 1.0), vec2(12.9898, 78.233))) * 43758.5453);
+          float n = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+          float settled = smoothstep(n - 0.12, n + 0.12, uSnowCover);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.9, 0.95), facing * settled);
+        }`,
+      );
+  };
+  m.customProgramCacheKey = () => "hearthlaw-snow-cover";
+}
+
+/** Harsh, faceted, non-metallic: the space kit's chrome reads as weathered iron. Snow settles on top. */
 function townMaterial(src: THREE.Material): THREE.Material {
   const m = (src as THREE.MeshStandardMaterial).clone();
   m.flatShading = true;
   m.roughness = 0.92;
   m.metalness = 0;
+  addSnowCover(m);
   m.needsUpdate = true;
   return m;
 }
