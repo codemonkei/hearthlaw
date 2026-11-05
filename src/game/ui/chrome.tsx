@@ -98,7 +98,7 @@ function TopBar() {
     { icon: <Utensils className="size-4 text-ember" />, label: "Meals", value: sim.resources.meals },
   ];
   return (
-    <header className="pointer-events-auto flex flex-wrap items-center gap-2 px-2 pt-2 sm:px-3">
+    <header className="pointer-events-none flex flex-wrap items-stretch justify-center gap-2 px-2 pt-2 sm:px-3 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:px-64 [&>*]:pointer-events-auto">
       <div className="hl-panel flex items-center gap-3 px-3 py-2">
         <div>
           <div className="hl-display text-lg leading-none">Hearthlaw</div>
@@ -109,7 +109,7 @@ function TopBar() {
           <div className="text-xs text-ember">{hush ? "The Hush" : "Cirque"}</div>
         </div>
       </div>
-      <div className="hl-panel flex flex-1 items-center justify-between gap-1 overflow-x-auto px-2 py-2">
+      <div className="hl-panel flex min-w-0 max-w-full items-center gap-2 overflow-x-auto px-3 py-2 max-md:order-first">
         {items.map((item) => (
           <div key={item.label} className="flex min-w-14 flex-col items-center px-1">
             {item.icon}
@@ -127,7 +127,7 @@ function Forecast() {
   const sim = useGame.getState().sim!;
   const today = dayIndex(sim.minute);
   return (
-    <div className="hl-panel hidden items-end gap-1 px-3 py-2 md:flex">
+    <div className="hl-panel hidden items-center gap-1 px-3 py-2 md:flex">
       {Array.from({ length: 8 }).map((_, i) => {
         const t = dayBaseTemp(i);
         const active = i === today;
@@ -467,7 +467,7 @@ function Notice({ text }: { text: string }) {
   return (
     <button
       type="button"
-      className="pointer-events-auto absolute top-2 left-1/2 z-20 max-w-sm -translate-x-1/2 hl-panel px-3 py-2 text-left text-sm"
+      className="pointer-events-auto absolute top-2 left-1/2 z-20 max-w-sm -translate-x-1/2 lg:top-28 hl-panel px-3 py-2 text-left text-sm"
       onClick={dismiss}
     >
       {text}
@@ -478,7 +478,7 @@ function Notice({ text }: { text: string }) {
 function Sheet({ title, kicker, children }: { title: string; kicker: string; children: ReactNode }) {
   const setPanel = useGame((s) => s.setPanel);
   return (
-    <section className="pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto md:w-96">
+    <section className="pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto md:w-96 lg:top-28">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="hl-kicker">{kicker}</p>
