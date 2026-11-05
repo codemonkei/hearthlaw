@@ -105,34 +105,39 @@ function Title({
             "radial-gradient(ellipse at 50% 78%, color-mix(in srgb, var(--color-ember) 55%, transparent), transparent 42%), radial-gradient(ellipse at 50% 120%, var(--color-copper), transparent 46%), linear-gradient(180deg, #10151b 0%, var(--color-ink) 48%, #1b140f 100%)",
         }}
       />
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-3xl flex-col justify-end px-5 pb-10 sm:justify-center sm:pb-0">
+      {/* Scrolls only if a very short screen still cannot hold it all. */}
+      <div className="relative z-10 h-full overflow-y-auto">
+      <div
+        className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-5 py-6 sm:justify-center sm:py-8"
+        style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+      >
         <p className="hl-kicker">First Watch · The Kindling</p>
-        <h1 className="hl-display mt-3 text-6xl leading-none text-snow sm:text-8xl">Hearthlaw</h1>
-        <p className="mt-4 max-w-xl text-lg leading-snug text-mist sm:text-xl">
+        <h1 className="hl-display mt-2 text-5xl leading-none text-snow sm:mt-3 sm:text-8xl">Hearthlaw</h1>
+        <p className="mt-3 max-w-xl text-base leading-snug text-mist sm:mt-4 sm:text-xl">
           Keep the fire. Write the law. Live with both.
         </p>
-        <p className="mt-4 max-w-xl text-sm leading-relaxed text-mist">
+        <p className="mt-3 max-w-xl text-xs leading-relaxed text-mist sm:mt-4 sm:text-sm">
           A buried engine called the Kiln still breathes in a glacier cirque. You are Warden of the
           Charter. House the convoy, feed the fire, and hold through the Hush — a two-day killing
           cold that arrives on day 6.
         </p>
-        <div className="mt-6 grid max-w-xl grid-cols-3 gap-3 text-sm">
+        <div className="mt-6 hidden max-w-xl grid-cols-3 gap-3 text-sm sm:grid">
           <Pill icon={<Flame className="size-4 text-ember" />} title="Warmth" text="One heat, spent in fuel." />
           <Pill icon={<ScrollText className="size-4 text-ember" />} title="Charter" text="Clauses the circles can refuse." />
           <Pill icon={<Landmark className="size-4 text-ember" />} title="Chronicle" text="Lives, liberty, kinship, truth." />
         </div>
         <Settings />
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:flex sm:gap-3">
           <button
             type="button"
-            className="min-h-12 rounded-xl bg-ember px-5 text-base font-medium text-ink"
+            className="min-h-12 rounded-xl bg-ember px-4 text-base font-medium text-ink sm:px-5"
             onClick={() => onStart((Math.random() * 0xffffffff) >>> 0)}
           >
             Take the Charter
           </button>
           <button
             type="button"
-            className="min-h-12 rounded-xl border border-line px-5 text-base text-snow"
+            className="min-h-12 rounded-xl border border-line px-4 text-base text-snow sm:px-5"
             onClick={() => onStart(192011)}
           >
             The first valley
@@ -140,18 +145,19 @@ function Title({
           {saved && (
             <button
               type="button"
-              className="min-h-12 rounded-xl border border-line px-5 text-base text-mist"
+              className="col-span-2 min-h-12 rounded-xl border border-line px-5 text-base text-mist"
               onClick={onResume}
             >
               Continue
             </button>
           )}
         </div>
-        <p className="mt-6 max-w-xl text-xs leading-relaxed text-mist">
+        <p className="mt-6 hidden max-w-xl text-xs leading-relaxed text-mist sm:block">
           Drag to pan, scroll or pinch to zoom, right-drag or Q/E to turn. WASD shifts the view.
           Space pauses. The letter O shows heat. Build on dark peat seams first, and keep tents
           inside the amber ring.
         </p>
+      </div>
       </div>
     </div>
   );
@@ -180,7 +186,7 @@ function Segmented<T extends string>({
           type="button"
           role="radio"
           aria-checked={value === o}
-          className={`min-h-10 flex-1 rounded-lg px-3 text-sm ${value === o ? "bg-ember text-ink" : "text-mist"}`}
+          className={`min-h-9 flex-1 rounded-lg px-2 text-sm sm:min-h-10 sm:px-3 ${value === o ? "bg-ember text-ink" : "text-mist"}`}
           onClick={() => onChange(o)}
         >
           {name(o)}
@@ -198,22 +204,36 @@ function Settings() {
   const setFx = useGame((s) => s.setFx);
   const tips = useGame((s) => s.tips);
   const setTips = useGame((s) => s.setTips);
+  const row = "flex items-center gap-3 sm:block";
+  const label = "hl-kicker w-20 shrink-0 sm:mb-2 sm:w-auto";
   return (
-    <div className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
+    <div className="mt-5 grid max-w-xl gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-4">
       <div>
-        <p className="hl-kicker mb-2">Difficulty</p>
-        <Segmented label="Difficulty" value={difficulty} options={DIFFICULTY_ORDER} name={(d) => DIFFICULTY[d].label} onChange={setDifficulty} />
-        <p className="mt-2 text-xs leading-snug text-mist">{DIFFICULTY[difficulty].blurb}</p>
+        <div className={row}>
+          <p className={label}>Difficulty</p>
+          <div className="min-w-0 flex-1">
+            <Segmented label="Difficulty" value={difficulty} options={DIFFICULTY_ORDER} name={(d) => DIFFICULTY[d].label} onChange={setDifficulty} />
+          </div>
+        </div>
+        <p className="mt-1 text-xs leading-snug text-mist sm:mt-2">{DIFFICULTY[difficulty].blurb}</p>
       </div>
       <div>
-        <p className="hl-kicker mb-2">Graphics</p>
-        <Segmented label="Graphics" value={fx} options={FX_ORDER} name={(q) => FX_LABEL[q]} onChange={setFx} />
-        <p className="mt-2 text-xs leading-snug text-mist">Set from this device on first run. G switches it in play.</p>
+        <div className={row}>
+          <p className={label}>Graphics</p>
+          <div className="min-w-0 flex-1">
+            <Segmented label="Graphics" value={fx} options={FX_ORDER} name={(q) => FX_LABEL[q]} onChange={setFx} />
+          </div>
+        </div>
+        <p className="mt-2 hidden text-xs leading-snug text-mist sm:block">Set from this device on first run. G switches it in play.</p>
       </div>
       <div className="sm:col-span-2">
-        <p className="hl-kicker mb-2">Tips</p>
-        <Segmented label="Tips" value={tips ? "on" : "off"} options={["on", "off"]} name={(v) => (v === "on" ? "Guide me" : "No tips")} onChange={(v) => setTips(v === "on")} />
-        <p className="mt-2 text-xs leading-snug text-mist">On for a first watch, off once you have played one. The bulb button switches them in play.</p>
+        <div className={row}>
+          <p className={label}>Tips</p>
+          <div className="min-w-0 flex-1">
+            <Segmented label="Tips" value={tips ? "on" : "off"} options={["on", "off"]} name={(v) => (v === "on" ? "Guide me" : "No tips")} onChange={(v) => setTips(v === "on")} />
+          </div>
+        </div>
+        <p className="mt-2 hidden text-xs leading-snug text-mist sm:block">On for a first watch, off once you have played one. The bulb button switches them in play.</p>
       </div>
     </div>
   );
