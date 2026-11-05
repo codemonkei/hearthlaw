@@ -58,6 +58,7 @@ import {
 import type { BuildingKind, CircleId, ClauseId, DealKind } from "@/game/sim/types";
 import { FX_LABEL } from "@/game/fx";
 import { currentTip } from "@/game/ui/tips";
+import { buildingIcon } from "@/game/ui/buildingIcons";
 import { useGame } from "@/game/store";
 import { TestModePanel } from "@/game/ui/TestMode";
 
@@ -423,7 +424,11 @@ function DockButton({
       aria-pressed={active}
       className={`min-w-28 shrink-0 rounded-xl border px-3 py-2 text-left ${active ? "border-ember bg-panel-2" : "border-line bg-panel"} ${afford ? "" : "opacity-60"}`}
     >
-      <div className="hl-display text-sm leading-tight">{def.name}</div>
+      <div className="flex items-center gap-1.5">
+        {/* Desktop only: phones keep the cards as small as they can. */}
+        <span aria-hidden className="hidden lg:inline-flex">{buildingIcon(kind)}</span>
+        <span className="hl-display text-sm leading-tight">{def.name}</span>
+      </div>
       <div className="mt-1 text-xs text-mist">
         {free ? "free (test mode)" : `${def.cost.timber} timber${def.cost.iron ? ` · ${def.cost.iron} iron` : ""}`}
       </div>
