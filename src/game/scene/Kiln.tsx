@@ -106,17 +106,10 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
       mouth: new THREE.MeshStandardMaterial({ color: "#2a0d05", emissive: "#ffb15c", emissiveIntensity: 3, side: THREE.DoubleSide }),
       iron: new THREE.MeshStandardMaterial({ color: IRON, metalness: 0.5, roughness: 0.55, emissive: "#ff3a12", emissiveIntensity: 0, ...FLAT }),
       copper: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff6a20", emissiveIntensity: 0, ...FLAT }),
-      /** The heat pipes glow on their own: strong emission that bloom picks up, day or night. */
+      /** Pipe copper: only a faint warmth of its own; the heat shows through the sight glasses. */
       pipe: new THREE.MeshStandardMaterial({ color: COPPER, metalness: 0.6, roughness: 0.38, emissive: "#ff4a10", emissiveIntensity: 0, ...FLAT }),
-      /** A soft additive shell around each pipe, so the glow reads even without bloom. */
-      halo: new THREE.MeshBasicMaterial({
-        color: new THREE.Color("#ff8a3a"),
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
-      }),
+      /** Sight glasses in the pipes: the fire seen through small barred windows, like the grates. */
+      sight: new THREE.MeshStandardMaterial({ color: "#2a0d05", emissive: "#ff7a2a", emissiveIntensity: 0, ...FLAT }),
       snowLip: new THREE.MeshStandardMaterial({ color: SNOW, roughness: 0.9, ...FLAT }),
       frost: new THREE.MeshStandardMaterial({ color: FROST, roughness: 0.7, transparent: true, opacity: 0.85, ...FLAT }),
       crack: new THREE.MeshBasicMaterial({ color: new THREE.Color("#ff5a1f").multiplyScalar(3), toneMapped: false, transparent: true }),
@@ -158,7 +151,6 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
         10,
       ),
       pipe: pipeGeometry(),
-      pipeHalo: pipeGeometry(0.15),
     }),
     [],
   );
@@ -191,10 +183,11 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
     const glow = feedback ? THREE.MathUtils.clamp((heat - 2.3) / 2.7, 0, 1) : 0;
     const pulse = 0.85 + breath * 0.15;
     mats.copper.emissiveIntensity = glow * 0.9 * pulse;
-    mats.pipe.emissiveIntensity = glow * 5 * pulse;
-    mats.pipe.emissive.copy(pipeDeep).lerp(pipeWhite, glow * glow);
-    mats.halo.opacity = glow * 0.5 * pulse;
-    mats.halo.color.copy(pipeDeep).lerp(pipeWhite, glow * 0.6);
+    mats.pipe.emissiveIntensity = glow * 0.5 * pulse;
+    // Sight glasses breathe with the grates, a little behind them, and run white-hot at the top end.
+    const sightBreath = Math.sin(t * (1.6 + s * 6) - 0.9) * 0.5 + 0.5;
+    mats.sight.emissiveIntensity = running ? heat * (0.75 + sightBreath * 0.25 + flicker) * (1 + glow * 0.6) : 0.05;
+    mats.sight.emissive.copy(pipeDeep).lerp(pipeWhite, 0.25 + glow * 0.65);
     const frostLeft = feedback ? THREE.MathUtils.clamp(1 - (heat - 1.2) / 3.2, 0.12, 1) : 1;
     mats.snowLip.color.copy(wetStone).lerp(snowColor, frostLeft);
     mats.frost.opacity = 0.85 * frostLeft;
@@ -311,7 +304,24 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
         {PIPE_ANGLES.map((a, i) => (
           <group key={`pipe-${i}`} position={[0, body(0), 0]} rotation={[0, a + Math.PI / 2, 0]}>
             <mesh geometry={geo.pipe} material={mats.pipe} castShadow />
-            {feedback && <mesh geometry={geo.pipeHalo} material={mats.halo} renderOrder={2} />}
+            {feedback &&
+              [GRATE_Y - 0.06, GRATE_Y - 0.3].map((y) => (
+                <group key={y} position={[DRUM_R + 0.255 + 0.07, y, 0]} rotation={[0, Math.PI / 2, 0]}>
+                  <mesh>
+                    <boxGeometry args={[0.11, 0.16, 0.03]} />
+                    <meshStandardMaterial color={IRON_LIGHT} metalness={0.5} roughness={0.5} {...FLAT} />
+                  </mesh>
+                  <mesh position={[0, 0, 0.017]} material={mats.sight}>
+                    <planeGeometry args={[0.07, 0.12]} />
+                  </mesh>
+                  {[-0.017, 0.017].map((x) => (
+                    <mesh key={x} position={[x, 0, 0.024]}>
+                      <boxGeometry args={[0.01, 0.13, 0.01]} />
+                      <meshStandardMaterial color="#161a1e" {...FLAT} />
+                    </mesh>
+                  ))}
+                </group>
+              ))}
             <mesh position={[DRUM_R + 0.04, GRATE_Y + 0.3, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.12, 0.12, 0.06, 8]} />
               <meshStandardMaterial color={IRON_LIGHT} metalness={0.5} roughness={0.5} {...FLAT} />
