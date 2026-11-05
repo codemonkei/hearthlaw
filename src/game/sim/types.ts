@@ -104,6 +104,8 @@ export interface SimState {
   seed: number;
   /** Pit: the city sinks toward the Kiln. Hill: it climbs to it. */
   terrain: Terrain;
+  /** Test mode: building, upgrades, heaters and research cost nothing. Off in normal play. */
+  testMode?: boolean;
   rng: [number, number, number, number];
   minute: number;
   speed: 0 | 1 | 2 | 4;

@@ -126,7 +126,15 @@ function spend(sim: SimState, key: ResourceKey, amount: number): boolean {
 }
 
 export function canAfford(sim: SimState, timber: number, iron: number): boolean {
+  if (sim.testMode) return true;
   return sim.resources.timber >= timber && sim.resources.iron >= iron;
+}
+
+/** Spend materials — nothing in test mode. */
+function pay(sim: SimState, timber: number, iron: number): void {
+  if (sim.testMode) return;
+  sim.resources.timber -= timber;
+  sim.resources.iron -= iron;
 }
 
 function workHour(sim: SimState, hour: number): boolean {
@@ -430,8 +438,7 @@ export function placeBuilding(
   if (!canAfford(sim, def.cost.timber, def.cost.iron)) {
     return { ok: false, reason: "Not enough timber or iron." };
   }
-  sim.resources.timber -= def.cost.timber;
-  sim.resources.iron -= def.cost.iron;
+  pay(sim, def.cost.timber, def.cost.iron);
   const building: Building = {
     id: sim.nextBuildingId++,
     kind,
@@ -456,8 +463,7 @@ export function upgradeBuilding(sim: SimState, id: number): { ok: boolean; reaso
   if (!canAfford(sim, def.cost.timber, def.cost.iron)) {
     return { ok: false, reason: "Not enough timber or iron." };
   }
-  sim.resources.timber -= def.cost.timber;
-  sim.resources.iron -= def.cost.iron;
+  pay(sim, def.cost.timber, def.cost.iron);
   b.kind = to;
   pushLog(sim, `Raised to a ${def.name}.`);
   return { ok: true };
@@ -492,6 +498,7 @@ export function setRadius(sim: SimState, radius: 1 | 2 | 3 | 4): { ok: boolean; 
 }
 
 export function maxRadius(sim: SimState): 1 | 2 | 3 | 4 {
+  if (sim.testMode) return 4;
   const extra = sim.research.unlocked.includes("wider-mouth") ? 1 : 0;
   return Math.min(4, 2 + extra) as 1 | 2 | 3 | 4;
 }
@@ -512,11 +519,11 @@ export function toggleHeater(sim: SimState, id: number): { ok: boolean; reason?:
   if (BUILDINGS[b.kind].housing > 0 && b.kind === "tent") {
     return { ok: false, reason: "Canvas will not hold a heater. Raise a hut first." };
   }
-  if (!sim.research.unlocked.includes("heaters")) {
+  if (!sim.testMode && !sim.research.unlocked.includes("heaters")) {
     return { ok: false, reason: "The Survey Hall has not fitted heaters yet." };
   }
-  if (!b.heater && sim.resources.iron < 4) return { ok: false, reason: "Fitting a heater takes 4 iron." };
-  if (!b.heater) sim.resources.iron -= 4;
+  if (!b.heater && !canAfford(sim, 0, 4)) return { ok: false, reason: "Fitting a heater takes 4 iron." };
+  if (!b.heater) pay(sim, 0, 4);
   b.heater = !b.heater;
   pushLog(sim, b.heater ? "Heater fitted." : "Heater shut and left in place.");
   return { ok: true };
@@ -524,17 +531,16 @@ export function toggleHeater(sim: SimState, id: number): { ok: boolean; reason?:
 
 export function buyResearch(sim: SimState, id: ResearchId): { ok: boolean; reason?: string } {
   if (sim.research.unlocked.includes(id)) return { ok: false, reason: "Already in the books." };
-  if (!sim.buildings.some((b) => b.kind === "survey")) {
+  if (!sim.testMode && !sim.buildings.some((b) => b.kind === "survey")) {
     return { ok: false, reason: "Raise a Survey Hall first." };
   }
   const def = RESEARCH[id];
-  if (sim.research.points < def.points) return { ok: false, reason: "Not enough survey notes." };
+  if (!sim.testMode && sim.research.points < def.points) return { ok: false, reason: "Not enough survey notes." };
   if (!canAfford(sim, def.cost.timber, def.cost.iron)) {
     return { ok: false, reason: "Not enough materials." };
   }
-  sim.research.points -= def.points;
-  sim.resources.timber -= def.cost.timber;
-  sim.resources.iron -= def.cost.iron;
+  if (!sim.testMode) sim.research.points -= def.points;
+  pay(sim, def.cost.timber, def.cost.iron);
   sim.research.unlocked.push(id);
   if (id === "ash-lining") sim.insulationBonus = 1;
   if (id === "dampers") sim.strainRise = 30;
@@ -953,7 +959,9 @@ function payHeat(sim: SimState): void {
   for (const b of sim.buildings) {
     b.heaterFed = false;
     if (!b.heater || !sim.kiln.running) continue;
-    if (sim.resources.fuel >= 1) {
+    if (sim.testMode) {
+      b.heaterFed = true;
+    } else if (sim.resources.fuel >= 1) {
       sim.resources.fuel -= 1;
       b.heaterFed = true;
     }

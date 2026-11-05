@@ -66,6 +66,10 @@ interface GameStore {
   select: (id: number | null) => void;
   setPanel: (panel: PanelId) => void;
   toggleHeat: () => void;
+  /** Test mode: free building, upgrades, heaters and research; time can be scrubbed while paused. */
+  toggleTestMode: () => void;
+  /** Move the clock while paused (test mode). Does not simulate the skipped time. */
+  scrubTo: (minute: number) => void;
   toggleFx: () => void;
   focusClause: (id: ClauseId | null) => void;
   setDeal: (circle: CircleId, deal: DealKind | null) => void;
@@ -232,6 +236,18 @@ export const useGame = create<GameStore>((set, get) => {
         rev: get().rev + 1,
       }),
     toggleHeat: () => set({ heat: !get().heat, rev: get().rev + 1 }),
+    toggleTestMode: () =>
+      apply((sim) => {
+        sim.testMode = !sim.testMode;
+        return { ok: true };
+      }),
+    scrubTo: (minute) => {
+      const sim = get().sim;
+      if (!sim || !sim.testMode || sim.speed !== 0) return;
+      sim.minute = Math.max(0, Math.round(minute));
+      saveSim(sim);
+      set({ rev: get().rev + 1 });
+    },
     toggleFx: () => {
       const fx: FxQuality = get().fx === "high" ? "low" : "high";
       try {

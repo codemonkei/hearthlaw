@@ -16,6 +16,7 @@ import {
   Users,
   Utensils,
   Volume2,
+  Wrench,
   VolumeX,
   X,
 } from "lucide-react";
@@ -53,6 +54,7 @@ import {
 } from "@/game/sim/engine";
 import type { BuildingKind, CircleId, ClauseId, DealKind } from "@/game/sim/types";
 import { useGame } from "@/game/store";
+import { TestModePanel } from "@/game/ui/TestMode";
 
 export function PlayChrome() {
   const rev = useGame((s) => s.rev);
@@ -75,6 +77,7 @@ export function PlayChrome() {
         <div className="relative min-w-0 flex-1">
           {notice && <Notice text={notice} />}
           <SideButtons />
+          <TestModePanel />
           {useGame.getState().panel === "charter" && <CharterBook />}
           {useGame.getState().panel === "survey" && <SurveyBook />}
           {useGame.getState().panel === "chronicle" && <ChronicleBook />}
@@ -230,6 +233,7 @@ function SideButtons() {
   const fx = useGame((s) => s.fx);
   const toggleFx = useGame((s) => s.toggleFx);
   const reset = useGame((s) => s.reset);
+  const toggleTestMode = useGame((s) => s.toggleTestMode);
   const [confirmReset, setConfirmReset] = useState(false);
   const sim = useGame.getState().sim!;
   const Btn = ({
@@ -274,6 +278,9 @@ function SideButtons() {
       </Btn>
       <Btn label={sim.muted ? "Unmute" : "Mute"} onClick={toggleMute}>
         {sim.muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+      </Btn>
+      <Btn label={sim.testMode ? "Test mode: on" : "Test mode"} onClick={toggleTestMode} active={Boolean(sim.testMode)}>
+        <Wrench className="size-5" />
       </Btn>
       <div className="relative mt-2">
         <Btn label="Reset the game" onClick={() => setConfirmReset((v) => !v)} active={confirmReset}>
@@ -370,7 +377,8 @@ function DockButton({
 }) {
   const def = BUILDINGS[kind];
   const hint = placementHint(useGame.getState().sim!, kind);
-  const afford = timber >= def.cost.timber && iron >= def.cost.iron;
+  const free = Boolean(useGame.getState().sim?.testMode);
+  const afford = free || (timber >= def.cost.timber && iron >= def.cost.iron);
   return (
     <button
       type="button"
@@ -379,7 +387,7 @@ function DockButton({
     >
       <div className="hl-display text-sm leading-tight">{def.name}</div>
       <div className="mt-1 text-xs text-mist">
-        {def.cost.timber} timber{def.cost.iron ? ` · ${def.cost.iron} iron` : ""}
+        {free ? "free (test mode)" : `${def.cost.timber} timber${def.cost.iron ? ` · ${def.cost.iron} iron` : ""}`}
       </div>
       <div className={`mt-0.5 text-[0.65rem] leading-tight ${active ? "text-ember" : "text-mist/80"}`}>{hint}</div>
     </button>
