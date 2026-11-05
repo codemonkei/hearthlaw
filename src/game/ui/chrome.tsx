@@ -8,6 +8,7 @@ import {
   Leaf,
   Pause,
   Play,
+  RotateCcw,
   ScrollText,
   Snowflake,
   Sparkles,
@@ -228,6 +229,8 @@ function SideButtons() {
   const heat = useGame((s) => s.heat);
   const fx = useGame((s) => s.fx);
   const toggleFx = useGame((s) => s.toggleFx);
+  const reset = useGame((s) => s.reset);
+  const [confirmReset, setConfirmReset] = useState(false);
   const sim = useGame.getState().sim!;
   const Btn = ({
     label,
@@ -272,6 +275,32 @@ function SideButtons() {
       <Btn label={sim.muted ? "Unmute" : "Mute"} onClick={toggleMute}>
         {sim.muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
       </Btn>
+      <div className="relative mt-2">
+        <Btn label="Reset the game" onClick={() => setConfirmReset((v) => !v)} active={confirmReset}>
+          <RotateCcw className="size-5" />
+        </Btn>
+        {confirmReset && (
+          <div className="absolute top-0 right-full mr-2 w-60 hl-panel p-3 text-left">
+            <p className="hl-display text-base leading-tight">Abandon this city?</p>
+            <p className="mt-1 text-xs leading-relaxed text-mist">The save is deleted and you return to the title. This cannot be undone.</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="min-h-10 flex-1 rounded-lg bg-blood px-3 text-sm text-snow"
+                onClick={() => {
+                  setConfirmReset(false);
+                  reset();
+                }}
+              >
+                Reset
+              </button>
+              <button type="button" className="min-h-10 flex-1 rounded-lg bg-panel-2 px-3 text-sm" onClick={() => setConfirmReset(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

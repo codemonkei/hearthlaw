@@ -19,6 +19,11 @@ export function GameApp() {
   const setPanel = useGame((s) => s.setPanel);
   const [saved, setSaved] = useState(false);
 
+  // Re-check on every return to the title: a reset deletes the save.
+  useEffect(() => {
+    if (phase === "title") setSaved(hasSave());
+  }, [phase]);
+
   useEffect(() => {
     boot();
     setSaved(hasSave());

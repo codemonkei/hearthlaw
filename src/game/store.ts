@@ -17,7 +17,7 @@ import {
   toggleSurge,
   upgradeBuilding,
 } from "./sim/engine";
-import { loadSim, saveSim } from "./sim/save";
+import { clearSave, loadSim, saveSim } from "./sim/save";
 import type { BuildingKind, CircleId, ClauseId, DealKind, ResearchId, SimState } from "./sim/types";
 
 const FX_KEY = "hearthlaw.fx";
@@ -57,6 +57,8 @@ interface GameStore {
   boot: () => void;
   start: (seed: number) => void;
   resume: () => void;
+  /** Abandon the current city: delete the save and return to the title. */
+  reset: () => void;
   drive: (dt: number) => void;
   setSpeed: (speed: 0 | 1 | 2 | 4) => void;
   togglePause: () => void;
@@ -146,6 +148,23 @@ export const useGame = create<GameStore>((set, get) => {
         pendingTile: null,
       });
       touchAudio(sim);
+    },
+    reset: () => {
+      acc = 0;
+      clearSave();
+      set({
+        sim: null,
+        phase: "title",
+        rev: get().rev + 1,
+        buildKind: null,
+        selectedId: null,
+        panel: null,
+        heat: false,
+        clauseId: null,
+        deals: {},
+        notice: null,
+        pendingTile: null,
+      });
     },
     resume: () => {
       const sim = loadSim();
