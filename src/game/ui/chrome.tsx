@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BookOpen,
+  Lightbulb,
   HousePlus,
   Eye,
   FastForward,
@@ -56,6 +57,7 @@ import {
 } from "@/game/sim/engine";
 import type { BuildingKind, CircleId, ClauseId, DealKind } from "@/game/sim/types";
 import { FX_LABEL } from "@/game/fx";
+import { currentTip } from "@/game/ui/tips";
 import { useGame } from "@/game/store";
 import { TestModePanel } from "@/game/ui/TestMode";
 
@@ -86,6 +88,7 @@ export function PlayChrome() {
           {useGame.getState().panel === "chronicle" && <ChronicleBook />}
           {useGame.getState().panel === "help" && <HelpBook />}
           <InspectCard />
+          <TipCard />
         </div>
       </div>
       <Dock />
@@ -258,6 +261,8 @@ function SideButtons() {
   const toggleFx = useGame((s) => s.toggleFx);
   const reset = useGame((s) => s.reset);
   const toggleTestMode = useGame((s) => s.toggleTestMode);
+  const tips = useGame((s) => s.tips);
+  const setTips = useGame((s) => s.setTips);
   const [confirmReset, setConfirmReset] = useState(false);
   const sim = useGame.getState().sim!;
   const Btn = ({
@@ -307,6 +312,9 @@ function SideButtons() {
       </Btn>
       <Btn label="How the cold works" onClick={() => setPanel("help")}>
         <Snowflake className="size-5" />
+      </Btn>
+      <Btn label={tips ? "Tips: on" : "Tips: off"} onClick={() => setTips(!tips)} active={tips}>
+        <Lightbulb className="size-5" />
       </Btn>
       <Btn label={sim.muted ? "Unmute" : "Mute"} onClick={toggleMute}>
         {sim.muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
@@ -406,7 +414,6 @@ function DockButton({
   onClick: () => void;
 }) {
   const def = BUILDINGS[kind];
-  const hint = placementHint(useGame.getState().sim!, kind);
   const free = Boolean(useGame.getState().sim?.testMode);
   const afford = free || (timber >= def.cost.timber && iron >= def.cost.iron);
   return (
@@ -420,7 +427,6 @@ function DockButton({
       <div className="mt-1 text-xs text-mist">
         {free ? "free (test mode)" : `${def.cost.timber} timber${def.cost.iron ? ` · ${def.cost.iron} iron` : ""}`}
       </div>
-      {active && <div className="mt-1 max-w-44 text-[0.65rem] leading-tight text-ember">{hint}</div>}
     </button>
   );
 }
@@ -546,6 +552,50 @@ function MobileKiln() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Guided tips. With a building card picked it explains that building and where it goes;
+ * otherwise it shows the next lesson the city has reached. Stays out of the way of
+ * events, books and the inspect card.
+ */
+function TipCard() {
+  const tips = useGame((s) => s.tips);
+  const setTips = useGame((s) => s.setTips);
+  const dismissTip = useGame((s) => s.dismissTip);
+  const buildKind = useGame((s) => s.buildKind);
+  const selectedId = useGame((s) => s.selectedId);
+  const panel = useGame((s) => s.panel);
+  const sim = useGame.getState().sim!;
+  if (!tips || panel || selectedId != null || sim.pendingEvent || sim.outcome) return null;
+  const tip = buildKind
+    ? { id: null, title: BUILDINGS[buildKind].name, text: `${BUILDINGS[buildKind].blurb} ${placementHint(sim, buildKind)}.` }
+    : currentTip(sim);
+  if (!tip) return null;
+  return (
+    <aside
+      role="status"
+      className="pointer-events-auto absolute inset-x-16 bottom-2 z-10 hl-panel px-3 py-2 lg:inset-x-auto lg:left-1/2 lg:w-96 lg:-translate-x-1/2"
+    >
+      <div className="flex items-start gap-2">
+        <Lightbulb className="mt-0.5 size-4 shrink-0 text-ember" />
+        <div className="min-w-0">
+          <p className="hl-display text-sm leading-tight">{tip.title}</p>
+          <p className="mt-1 text-xs leading-snug text-mist">{tip.text}</p>
+        </div>
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <button type="button" className="min-h-9 rounded-lg px-2 text-xs text-mist" onClick={() => setTips(false)}>
+          Tips off
+        </button>
+        {tip.id && (
+          <button type="button" className="min-h-9 rounded-lg bg-ember px-3 text-xs text-ink" onClick={() => dismissTip(tip.id)}>
+            Got it
+          </button>
+        )}
+      </div>
+    </aside>
   );
 }
 

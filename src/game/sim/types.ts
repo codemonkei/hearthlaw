@@ -149,6 +149,8 @@ export interface SimState {
   outcome: null | "exile" | "kiln" | "empty" | "endured";
   stats: { signed: number; deaths: number; mealsServed: number };
   muted: boolean;
+  /** Presentation only, never read by the sim: guided tips already shown in this game. */
+  tipsSeen?: string[];
 }
 
 export interface StaffRow {

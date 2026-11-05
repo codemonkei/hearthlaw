@@ -196,6 +196,8 @@ function Settings() {
   const setDifficulty = useGame((s) => s.setDifficulty);
   const fx = useGame((s) => s.fx);
   const setFx = useGame((s) => s.setFx);
+  const tips = useGame((s) => s.tips);
+  const setTips = useGame((s) => s.setTips);
   return (
     <div className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
       <div>
@@ -207,6 +209,11 @@ function Settings() {
         <p className="hl-kicker mb-2">Graphics</p>
         <Segmented label="Graphics" value={fx} options={FX_ORDER} name={(q) => FX_LABEL[q]} onChange={setFx} />
         <p className="mt-2 text-xs leading-snug text-mist">Set from this device on first run. G switches it in play.</p>
+      </div>
+      <div className="sm:col-span-2">
+        <p className="hl-kicker mb-2">Tips</p>
+        <Segmented label="Tips" value={tips ? "on" : "off"} options={["on", "off"]} name={(v) => (v === "on" ? "Guide me" : "No tips")} onChange={(v) => setTips(v === "on")} />
+        <p className="mt-2 text-xs leading-snug text-mist">On for a first watch, off once you have played one. The bulb button switches them in play.</p>
       </div>
     </div>
   );

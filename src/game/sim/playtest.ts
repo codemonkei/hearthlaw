@@ -4,6 +4,7 @@
  */
 import { BUILDINGS, CLAUSE_ORDER, DOCK_ORDER, RESEARCH_ORDER, outdoorBand, outdoorTemp, dayIndex } from "./content";
 import * as E from "./engine";
+import { currentTip } from "../ui/tips";
 import type { BuildingKind, Difficulty, SimState, ResourceKey } from "./types";
 
 const problems = new Map<string, { count: number; example: string }>();
@@ -211,6 +212,14 @@ function play(seed: number, policy: Policy, choose: "first" | "random" | "stewar
     }
     const d = dayIndex(sim.minute);
     deathsByDay[d] = (deathsByDay[d] ?? 0) + (sim.pop.dead - deadBefore);
+    if (TRACE && rngSeed === 1 && sim.minute % 30 === 0) {
+      // Tip timeline: the moment each guided tip would appear, read as if the player taps "Got it".
+      const tip = currentTip(sim);
+      if (tip) {
+        console.log(`  TIP d${d + 1} ${String(Math.floor((sim.minute % 1440) / 60)).padStart(2, "0")}:${String(sim.minute % 60).padStart(2, "0")} ${tip.id}`);
+        sim.tipsSeen = [...(sim.tipsSeen ?? []), tip.id];
+      }
+    }
     if (TRACE && rngSeed === 1 && sim.minute % 360 === 0) {
       const eco = E.evaluate(sim);
       const freePeat = sim.tiles.filter((t) => t.buildingId == null && E.liveDeposit(t) === "peat").length;

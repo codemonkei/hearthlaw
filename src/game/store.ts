@@ -23,6 +23,16 @@ import type { BuildingKind, CircleId, ClauseId, DealKind, Difficulty, ResearchId
 const FX_KEY = "hearthlaw.fx";
 const DIFFICULTY_KEY = "hearthlaw.difficulty";
 const DOCK_KEY = "hearthlaw.dock";
+const TIPS_KEY = "hearthlaw.tips";
+const PLAYED_KEY = "hearthlaw.played";
+
+/** Tips follow the player's own choice; with none made they are on until a first game has ended. */
+function loadTips(): boolean {
+  const v = read(TIPS_KEY);
+  if (v === "on") return true;
+  if (v === "off") return false;
+  return read(PLAYED_KEY) !== "1";
+}
 
 function store(key: string, value: string): void {
   try {
@@ -70,6 +80,10 @@ interface GameStore {
   /** Phones: the build cards can be folded away. Desktop always shows them. */
   dockOpen: boolean;
   toggleDock: () => void;
+  /** Guided tips: on for a first game, off by default after one has ended. */
+  tips: boolean;
+  setTips: (on: boolean) => void;
+  dismissTip: (id: string) => void;
   selectedId: number | null;
   panel: PanelId;
   heat: boolean;
@@ -152,6 +166,7 @@ export const useGame = create<GameStore>((set, get) => {
     rev: 0,
     buildKind: null,
     dockOpen: read(DOCK_KEY) !== "0",
+    tips: loadTips(),
     selectedId: null,
     panel: null,
     heat: false,
@@ -172,6 +187,7 @@ export const useGame = create<GameStore>((set, get) => {
       unlockAudio();
       const sim = createGame(seed, get().difficulty);
       set({
+        tips: loadTips(),
         sim,
         phase: "play",
         rev: get().rev + 1,
@@ -238,6 +254,7 @@ export const useGame = create<GameStore>((set, get) => {
       // A frame can advance several minutes, so act on the boundaries it crossed rather than
       // on landing exactly on them (which fast speeds and slow frames can skip forever).
       const crossed = (every: number) => Math.floor(sim.minute / every) !== Math.floor(start / every);
+      if (sim.outcome) store(PLAYED_KEY, "1");
       if (crossed(10) || sim.pendingEvent || sim.outcome) {
         if (crossed(60) || sim.pendingEvent || sim.outcome) saveSim(sim);
         touchAudio(sim);
@@ -287,6 +304,17 @@ export const useGame = create<GameStore>((set, get) => {
     setFx: (fx) => {
       store(FX_KEY, fx);
       set({ fx });
+    },
+    setTips: (tips) => {
+      store(TIPS_KEY, tips ? "on" : "off");
+      set({ tips, rev: get().rev + 1 });
+    },
+    dismissTip: (id) => {
+      const sim = get().sim;
+      if (!sim) return;
+      sim.tipsSeen = [...(sim.tipsSeen ?? []), id];
+      saveSim(sim);
+      set({ rev: get().rev + 1 });
     },
     toggleDock: () => {
       const dockOpen = !get().dockOpen;
@@ -350,6 +378,7 @@ export const useGame = create<GameStore>((set, get) => {
       if (!sim?.pendingEvent) return;
       const was = sim.pendingEvent;
       resolveEvent(sim, choice);
+      if (sim.outcome) store(PLAYED_KEY, "1");
       const panel = was === "victory" ? "chronicle" : get().panel;
       saveSim(sim);
       touchAudio(sim);
