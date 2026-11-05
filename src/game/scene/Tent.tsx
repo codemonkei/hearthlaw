@@ -93,23 +93,50 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
     s.closePath();
     return new THREE.ShapeGeometry(s);
   }, []);
-  /** A snow cap along the ridge: a thin layer that follows the roof pitch, thickest at the top. */
-  const ridgeSnow = useMemo(() => {
-    const tan = Math.tan(slope.angle);
-    const a = 0.17;
-    const roofAt = (x: number) => RIDGE + 0.012 - Math.abs(x) * tan;
-    const s = new THREE.Shape();
-    s.moveTo(-a, roofAt(-a));
-    s.lineTo(-a * 0.55, roofAt(-a * 0.55) + 0.028);
-    s.lineTo(0, RIDGE + 0.05);
-    s.lineTo(a * 0.55, roofAt(a * 0.55) + 0.028);
-    s.lineTo(a, roofAt(a));
-    s.lineTo(0, RIDGE + 0.012);
-    s.closePath();
-    const g = new THREE.ExtrudeGeometry(s, { depth: L + 0.04, bevelEnabled: false });
-    g.translate(0, 0, -(L + 0.04) / 2);
-    return g;
-  }, [slope.angle]);
+  /**
+   * Snow on each roof slope, like the snow on the trees: a thick slab covering the upper part
+   * of the slope with a soft, lumpy, wavy lower edge, overhanging the gable ends a little.
+   * Shape coordinates: x runs down the slope from the ridge, y along the tent.
+   */
+  const roofSnow = useMemo(() => {
+    const make = (phase: number) => {
+      const half = L / 2 + 0.04;
+      const cover = slope.length * 0.56;
+      const edge = (v: number) =>
+        cover +
+        0.05 * Math.sin(v * 8.5 + phase) +
+        0.03 * Math.sin(v * 21 + phase * 2.3) +
+        0.025 * Math.max(0, Math.sin(v * 37 + phase * 4.1)); // little sagging tongues
+      const shape = new THREE.Shape();
+      shape.moveTo(-0.01, -half);
+      shape.lineTo(-0.01, half);
+      const steps = 18;
+      for (let i = 0; i <= steps; i++) {
+        const v = half - (i / steps) * 2 * half;
+        shape.lineTo(edge(v), v);
+      }
+      shape.closePath();
+      const g = new THREE.ExtrudeGeometry(shape, {
+        depth: 0.022,
+        bevelEnabled: true,
+        bevelThickness: 0.014,
+        bevelSize: 0.016,
+        bevelSegments: 1,
+        curveSegments: 1,
+      });
+      return g;
+    };
+    return { right: make(0.7), left: make(2.9) };
+  }, [slope.length]);
+  /** Lumps of snow along the ridge where the two slabs meet. */
+  const ridgeLumps = useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, i) => {
+        const z = -L / 2 + 0.02 + (i / 5) * (L - 0.04);
+        return { z, r: 0.055 + ((i * 7) % 3) * 0.012, turn: i * 1.1 };
+      }),
+    [],
+  );
   /** Soft heaps of snow at the corners and along the walls. */
   const drifts = useMemo(
     () =>
@@ -158,6 +185,16 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
           <mesh castShadow receiveShadow>
             <boxGeometry args={[slope.length, 0.018, L + 0.08]} />
             <meshStandardMaterial color={canvasColor} roughness={0.92} {...FLAT} />
+          </mesh>
+          <mesh
+            geometry={side === 1 ? roofSnow.right : roofSnow.left}
+            position={[(-side * slope.length) / 2, 0.012, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={[side, 1, 1]}
+            castShadow
+            receiveShadow
+          >
+            <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
           </mesh>
           {[-0.33, 0, 0.33].map((z) => (
             <mesh key={z} position={[0, 0.011, z]}>
@@ -229,9 +266,12 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
       </mesh>
 
       {/* Snow drifted against the walls, a crate and firewood by the door. */}
-      <mesh geometry={ridgeSnow} castShadow receiveShadow>
-        <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
-      </mesh>
+      {ridgeLumps.map((l, i) => (
+        <mesh key={`ridge-snow-${i}`} position={[0, RIDGE + 0.03, l.z]} rotation={[0, l.turn, 0]} scale={[1.3, 0.55, 1.1]} castShadow>
+          <icosahedronGeometry args={[l.r, 0]} />
+          <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
+        </mesh>
+      ))}
       {drifts.map(([x, z, r], i) => (
         <mesh key={`drift-${i}`} position={[x, r * 0.15, z]} rotation={[0, i * 1.3, 0]} scale={[1.25, 0.45, 1]} castShadow receiveShadow>
           <icosahedronGeometry args={[r, 1]} />
