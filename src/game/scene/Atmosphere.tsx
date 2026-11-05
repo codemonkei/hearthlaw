@@ -4,7 +4,7 @@ import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, ToneMapping, 
 import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import type { FxQuality } from "@/game/fx";
+import { FX_SETTINGS, type FxQuality } from "@/game/fx";
 
 /*
  * Mood: low winter sun by day, moonlight by night, warm firelight from the Kiln and
@@ -130,7 +130,7 @@ export function SceneLighting({
   /** Fractional hour (0–24) and outdoor °C, read every frame. */
   clock: () => { hour: number; tempC: number } | null;
 }) {
-  const shadowSize = quality === "high" ? 2048 : 1024;
+  const { shadowSize, shadows } = FX_SETTINGS[quality];
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const sun = useRef<THREE.Mesh>(null);
@@ -208,7 +208,8 @@ export function SceneLighting({
       <hemisphereLight ref={hemi} args={["#9cb2cc", "#2f3a48", 0.6]} />
       <directionalLight
         ref={key}
-        castShadow
+        castShadow={shadows}
+        key={shadowSize}
         shadow-mapSize-width={shadowSize}
         shadow-mapSize-height={shadowSize}
         shadow-bias={-0.0004}
@@ -242,9 +243,10 @@ export function PostFx({ quality }: { quality: FxQuality }) {
     // Sunlit snow is bright; raise the bar by day so only fire and the sun bloom.
     if (bloom.current) bloom.current.luminanceMaterial.threshold = 1.05 + weather.daylight * 0.9 + weather.storm * 0.2;
   });
-  if (quality === "low") return null;
+  const { post, multisampling } = FX_SETTINGS[quality];
+  if (!post) return null;
   return (
-    <EffectComposer multisampling={4}>
+    <EffectComposer multisampling={multisampling} key={quality}>
       <Bloom
         ref={bloom as never}
         mipmapBlur

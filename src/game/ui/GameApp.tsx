@@ -8,6 +8,9 @@ import { PlayChrome } from "@/game/ui/chrome";
 import { KilnLab } from "@/game/ui/KilnLab";
 import { buildShowcase, isShowcase } from "@/game/showcase";
 import { Flame, ScrollText, Landmark } from "lucide-react";
+import { DIFFICULTY } from "@/game/sim/content";
+import { FX_LABEL, FX_ORDER } from "@/game/fx";
+import type { Difficulty } from "@/game/sim/types";
 
 export function GameApp() {
   const phase = useGame((s) => s.phase);
@@ -118,7 +121,8 @@ function Title({
           <Pill icon={<ScrollText className="size-4 text-ember" />} title="Charter" text="Clauses the circles can refuse." />
           <Pill icon={<Landmark className="size-4 text-ember" />} title="Chronicle" text="Lives, liberty, kinship, truth." />
         </div>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <Settings />
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             className="min-h-12 rounded-xl bg-ember px-5 text-base font-medium text-ink"
@@ -148,6 +152,61 @@ function Title({
           Space pauses. The letter O shows heat. Build on dark peat seams first, and keep tents
           inside the amber ring.
         </p>
+      </div>
+    </div>
+  );
+}
+
+const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  name,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: T[];
+  name: (v: T) => string;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded-xl border border-line bg-panel p-1">
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          role="radio"
+          aria-checked={value === o}
+          className={`min-h-10 flex-1 rounded-lg px-3 text-sm ${value === o ? "bg-ember text-ink" : "text-mist"}`}
+          onClick={() => onChange(o)}
+        >
+          {name(o)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** New-game difficulty and the graphics tier (first set from the device, changeable any time). */
+function Settings() {
+  const difficulty = useGame((s) => s.difficulty);
+  const setDifficulty = useGame((s) => s.setDifficulty);
+  const fx = useGame((s) => s.fx);
+  const setFx = useGame((s) => s.setFx);
+  return (
+    <div className="mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
+      <div>
+        <p className="hl-kicker mb-2">Difficulty</p>
+        <Segmented label="Difficulty" value={difficulty} options={DIFFICULTY_ORDER} name={(d) => DIFFICULTY[d].label} onChange={setDifficulty} />
+        <p className="mt-2 text-xs leading-snug text-mist">{DIFFICULTY[difficulty].blurb}</p>
+      </div>
+      <div>
+        <p className="hl-kicker mb-2">Graphics</p>
+        <Segmented label="Graphics" value={fx} options={FX_ORDER} name={(q) => FX_LABEL[q]} onChange={setFx} />
+        <p className="mt-2 text-xs leading-snug text-mist">Set from this device on first run. G switches it in play.</p>
       </div>
     </div>
   );

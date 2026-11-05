@@ -1,10 +1,10 @@
 /*
  * Playtest harness: plays full games with several strategies over many seeds, checks invariants
- * every hour, and prints outcome / balance stats. Run: npm run playtest [-- games]. Healthy balance: idle is exiled, the steward endures with a few Hush deaths, chaos loses, and no invariant problems.
+ * every hour, and prints outcome / balance stats. Run: npm run playtest [-- games [easy|medium|hard]]. Healthy balance: idle and chaos are exiled on every difficulty; on easy a casual player endures, on medium a careful one endures with a few Hush deaths, on hard a careful one endures about half the time; no invariant problems.
  */
 import { BUILDINGS, CLAUSE_ORDER, DOCK_ORDER, RESEARCH_ORDER, outdoorBand, outdoorTemp, dayIndex } from "./content";
 import * as E from "./engine";
-import type { BuildingKind, SimState, ResourceKey } from "./types";
+import type { BuildingKind, Difficulty, SimState, ResourceKey } from "./types";
 
 const problems = new Map<string, { count: number; example: string }>();
 function flag(kind: string, example: string) {
@@ -68,20 +68,39 @@ const plain = (maxRing: number) => (t: SimState["tiles"][number]) => E.liveDepos
 /** Does nothing but answer events. */
 const idle: Policy = () => {};
 
-/** A sensible, careful player. */
-const steward: Policy = (sim) => {
+/** A sensible player; `careful` adds research, upgrades, heaters and full Hush pressure. */
+const makeSteward = (careful: boolean): Policy => (sim) => {
   const day = dayIndex(sim.minute) + 1;
-  const housing = sim.buildings.reduce((n, b) => n + BUILDINGS[b.kind].housing, 0);
-  if (count(sim, "trappers") < 2) place(sim, "trappers", deposit("lichen"));
-  if (count(sim, "mess") < 1) place(sim, "mess", plain(2));
-  if (count(sim, "peat") < 3) place(sim, "peat", deposit("peat"));
-  if (count(sim, "wood") < 1) place(sim, "wood", deposit("timber"));
-  if (housing < living(sim)) place(sim, "tent", plain(sim.kiln.radius));
-  if (count(sim, "infirmary") < 1) place(sim, "infirmary", plain(3));
-  if (count(sim, "survey") < 1) place(sim, "survey", plain(3));
-  if (count(sim, "salvage") < 1) place(sim, "salvage", deposit("scrap"));
-  if (count(sim, "trappers") < 3 && living(sim) > 90) place(sim, "trappers", deposit("lichen"));
-  if (count(sim, "peat") < 4 && day >= 3) place(sim, "peat", deposit("peat"));
+  const housing = () => sim.buildings.reduce((n, b) => n + BUILDINGS[b.kind].housing, 0);
+  // Build only what can be staffed, in the order a player reading the staffing panel would.
+  const staffable = (k: BuildingKind) => {
+    const def = BUILDINGS[k];
+    if (def.staff === 0) return true;
+    const eco = E.evaluate(sim);
+    return (def.staffClass === "specialists" ? eco.specialistFree : eco.labourFree) >= def.staff;
+  };
+  const build = (k: BuildingKind, n: number, where: (t: SimState["tiles"][number]) => boolean) => {
+    if (count(sim, k) < n && staffable(k)) place(sim, k, where);
+  };
+  build("peat", 1, deposit("peat"));
+  build("wood", 1, deposit("timber"));
+  build("trappers", 1, deposit("lichen"));
+  build("mess", 1, plain(2));
+  while (housing() < living(sim) && place(sim, "tent", plain(sim.kiln.radius + 1))) {}
+  build("peat", 2, deposit("peat"));
+  build("infirmary", 1, plain(3));
+  build("survey", 1, plain(3));
+  build("peat", 3, deposit("peat"));
+  if (sim.resources.meals < 250) build("trappers", 2, deposit("lichen"));
+  build("salvage", 1, deposit("scrap"));
+  // Watch the fuel line: a careful warden opens more seams before the Hush if stores sag.
+  if (careful && day <= 5 && sim.resources.fuel < 400) build("peat", 5, deposit("peat"));
+  if (!careful) {
+    // A first-time player: builds the basics and tents, never upgrades, holds pressure 2 in the Hush.
+    const want = dayIndex(sim.minute) >= 5 || outdoorBand(outdoorTemp(sim.minute)) <= -2 ? 2 : 1;
+    if (sim.kiln.pressure !== want) E.setPressure(sim, want);
+    return;
+  }
   for (const id of RESEARCH_ORDER) E.buyResearch(sim, id);
   // Upgrade housing when materials allow, keeping a reserve.
   for (const b of sim.buildings) {
@@ -99,6 +118,9 @@ const steward: Policy = (sim) => {
   const outer = sim.buildings.some((b) => BUILDINGS[b.kind].housing > 0 && ring(b) > sim.kiln.radius);
   if (outer && sim.kiln.radius < E.maxRadius(sim) && sim.resources.fuel > 300) E.setRadius(sim, (sim.kiln.radius + 1) as 1 | 2 | 3 | 4);
 };
+
+const steward = makeSteward(true);
+const casual = makeSteward(false);
 
 /** Builds anything it can afford anywhere, flips controls at random, answers events at random. */
 const chaos: Policy = (sim, rnd) => {
@@ -154,8 +176,8 @@ interface Result {
   deathsByDay: number[];
 }
 
-function play(seed: number, policy: Policy, choose: "first" | "random" | "steward", rngSeed: number): Result {
-  const sim = E.createGame(seed);
+function play(seed: number, policy: Policy, choose: "first" | "random" | "steward", rngSeed: number, difficulty: Difficulty): Result {
+  const sim = E.createGame(seed, difficulty);
   const rnd = mulberry(rngSeed);
   const events: string[] = [];
   let minFuel = Infinity, minMeals = Infinity, maxStrain = 0, minResolve = 1000, maxGrievance = 0;
@@ -189,6 +211,11 @@ function play(seed: number, policy: Policy, choose: "first" | "random" | "stewar
     }
     const d = dayIndex(sim.minute);
     deathsByDay[d] = (deathsByDay[d] ?? 0) + (sim.pop.dead - deadBefore);
+    if (TRACE && rngSeed === 1 && sim.minute % 360 === 0) {
+      const eco = E.evaluate(sim);
+      const freePeat = sim.tiles.filter((t) => t.buildingId == null && E.liveDeposit(t) === "peat").length;
+      console.log(`  d${d + 1}h${(sim.minute % 1440) / 60} ${outdoorTemp(sim.minute)}°C fuel ${sim.resources.fuel} timber ${sim.resources.timber} iron ${sim.resources.iron} burn ${eco.burn} p${sim.kiln.pressure}r${sim.kiln.radius} peat ${count(sim, "peat")} (free seams ${freePeat}) labour free ${eco.labourFree} housing ${eco.housingCap}/${eco.living} dead ${sim.pop.dead} grievance ${sim.morale.grievance} | ${eco.rows.filter((r) => r.need > 0).map((r) => `${r.kind}${r.assigned}/${r.need}`).join(" ")}`);
+    }
     if (sim.minute % 60 === 0) {
       check(sim, `seed ${seed} d${d + 1}h${Math.floor((sim.minute % 1440) / 60)}`);
       minFuel = Math.min(minFuel, sim.resources.fuel);
@@ -215,8 +242,13 @@ function play(seed: number, policy: Policy, choose: "first" | "random" | "stewar
 }
 
 const games = Number(process.argv[2] ?? 40);
+const TRACE = process.argv[4] != null;
+const traceOnly = process.argv[4];
+const arg3 = process.argv[3];
+const difficulties: Difficulty[] = arg3 === "easy" || arg3 === "medium" || arg3 === "hard" ? [arg3] : ["easy", "medium", "hard"];
 const runs: [string, Policy, "first" | "random" | "steward"][] = [
   ["idle/first", idle, "first"],
+  ["casual", casual, "steward"],
   ["steward", steward, "steward"],
   ["steward/random-events", steward, "random"],
   ["chaos", chaos, "random"],
@@ -225,9 +257,11 @@ const pct = (xs: number[], p: number) => {
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.floor(p * s.length))]!;
 };
-for (const [name, policy, choose] of runs) {
+for (const difficulty of difficulties) for (const [label, policy, choose] of runs) {
+  if (traceOnly && label !== traceOnly) continue;
+  const name = `${difficulty} · ${label}`;
   const results: Result[] = [];
-  for (let i = 0; i < games; i++) results.push(play(1000 + i * 7919, policy, choose, i + 1));
+  for (let i = 0; i < games; i++) results.push(play(1000 + i * 7919, policy, choose, i + 1, difficulty));
   const outcomes: Record<string, number> = {};
   for (const r of results) outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
   const deaths = results.map((r) => r.dead);

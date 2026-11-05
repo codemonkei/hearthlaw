@@ -1,4 +1,4 @@
-import { detectFxQuality, type FxQuality } from "./fx";
+import { detectFxQuality, FX_ORDER, type FxQuality } from "./fx";
 import { create } from "zustand";
 import { syncKiln, unlockAudio } from "./audio";
 import {
@@ -18,18 +18,40 @@ import {
   upgradeBuilding,
 } from "./sim/engine";
 import { clearSave, loadSim, saveSim } from "./sim/save";
-import type { BuildingKind, CircleId, ClauseId, DealKind, ResearchId, SimState } from "./sim/types";
+import type { BuildingKind, CircleId, ClauseId, DealKind, Difficulty, ResearchId, SimState } from "./sim/types";
 
 const FX_KEY = "hearthlaw.fx";
+const DIFFICULTY_KEY = "hearthlaw.difficulty";
 
-function loadFx(): FxQuality {
+function store(key: string, value: string): void {
   try {
-    const v = window.localStorage.getItem(FX_KEY);
-    if (v === "high" || v === "low") return v;
+    window.localStorage.setItem(key, value);
   } catch {
-    /* fall through to the device guess */
+    /* storage blocked — the choice lasts this session */
   }
-  return detectFxQuality();
+}
+
+function read(key: string): string | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** The saved tier, or on the very first run a guess from the device, saved so it stays put. */
+function loadFx(): FxQuality {
+  const v = read(FX_KEY);
+  if (v === "high" || v === "medium" || v === "low") return v;
+  if (typeof window === "undefined") return "high";
+  const guess = detectFxQuality();
+  store(FX_KEY, guess);
+  return guess;
+}
+
+function loadDifficulty(): Difficulty {
+  const v = read(DIFFICULTY_KEY);
+  return v === "easy" || v === "hard" ? v : "medium";
 }
 
 export type PanelId = "charter" | "chronicle" | "help" | "survey" | null;
@@ -49,6 +71,8 @@ interface GameStore {
   heat: boolean;
   /** Visual quality: post-processing, shadow resolution, pixel ratio. Presentation only. */
   fx: FxQuality;
+  /** Difficulty for the next new game. A running game keeps the one it started with. */
+  difficulty: Difficulty;
   clauseId: ClauseId | null;
   deals: Partial<Record<CircleId, DealKind | null>>;
   notice: string | null;
@@ -70,7 +94,10 @@ interface GameStore {
   toggleTestMode: () => void;
   /** Move the clock while paused (test mode). Does not simulate the skipped time. */
   scrubTo: (minute: number) => void;
+  /** Step to the next graphics tier (low → medium → high → low). */
   toggleFx: () => void;
+  setFx: (fx: FxQuality) => void;
+  setDifficulty: (d: Difficulty) => void;
   focusClause: (id: ClauseId | null) => void;
   setDeal: (circle: CircleId, deal: DealKind | null) => void;
   tryPlace: (q: number, r: number) => void;
@@ -124,6 +151,7 @@ export const useGame = create<GameStore>((set, get) => {
     panel: null,
     heat: false,
     fx: loadFx(),
+    difficulty: loadDifficulty(),
     clauseId: null,
     deals: {},
     notice: null,
@@ -137,7 +165,7 @@ export const useGame = create<GameStore>((set, get) => {
     start: (seed: number) => {
       acc = 0;
       unlockAudio();
-      const sim = createGame(seed);
+      const sim = createGame(seed, get().difficulty);
       set({
         sim,
         phase: "play",
@@ -250,14 +278,14 @@ export const useGame = create<GameStore>((set, get) => {
       saveSim(sim);
       set({ rev: get().rev + 1 });
     },
-    toggleFx: () => {
-      const fx: FxQuality = get().fx === "high" ? "low" : "high";
-      try {
-        window.localStorage.setItem(FX_KEY, fx);
-      } catch {
-        /* storage blocked — the choice lasts this session */
-      }
+    toggleFx: () => get().setFx(FX_ORDER[(FX_ORDER.indexOf(get().fx) + 1) % FX_ORDER.length]!),
+    setFx: (fx) => {
+      store(FX_KEY, fx);
       set({ fx });
+    },
+    setDifficulty: (difficulty) => {
+      store(DIFFICULTY_KEY, difficulty);
+      set({ difficulty });
     },
     focusClause: (id) => set({ clauseId: id, deals: {}, rev: get().rev + 1 }),
     setDeal: (circle, deal) => {

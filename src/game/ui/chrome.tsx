@@ -31,6 +31,7 @@ import {
   RESEARCH,
   RESEARCH_ORDER,
   dayBaseTemp,
+  difficultyOf,
   dayIndex,
   formatClock,
   outdoorTemp,
@@ -53,6 +54,7 @@ import {
   weakestAxis,
 } from "@/game/sim/engine";
 import type { BuildingKind, CircleId, ClauseId, DealKind } from "@/game/sim/types";
+import { FX_LABEL } from "@/game/fx";
 import { useGame } from "@/game/store";
 import { TestModePanel } from "@/game/ui/TestMode";
 
@@ -159,7 +161,7 @@ function KilnCard() {
   const doPressure = useGame((s) => s.doPressure);
   const doRadius = useGame((s) => s.doRadius);
   const doSurge = useGame((s) => s.doSurge);
-  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius);
+  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
   const cap = maxRadius(sim);
   return (
     <section className="pointer-events-auto m-2 hidden w-56 flex-col gap-3 self-start hl-panel p-3 lg:flex">
@@ -270,8 +272,13 @@ function SideButtons() {
       <Btn label="Heat overlay" onClick={toggleHeat} active={heat}>
         <Eye className="size-5" />
       </Btn>
-      <Btn label={fx === "high" ? "Graphics: high (G)" : "Graphics: low (G)"} onClick={toggleFx} active={fx === "high"}>
-        <Sparkles className="size-5" />
+      <Btn label={`Graphics: ${FX_LABEL[fx]} (G)`} onClick={toggleFx}>
+        <span className="relative">
+          <Sparkles className="size-5" />
+          <span className="absolute -right-2.5 -bottom-2 rounded bg-ember px-1 text-[0.6rem] leading-tight font-semibold text-ink">
+            {FX_LABEL[fx][0]}
+          </span>
+        </span>
       </Btn>
       <Btn label="How the cold works" onClick={() => setPanel("help")}>
         <Snowflake className="size-5" />
@@ -908,7 +915,7 @@ function EndCard() {
           ))}
         </div>
         <p className="mt-3 text-xs text-mist">
-          {sim.stats.deaths} dead · {sim.stats.signed} clauses · seed {sim.seed}
+          {sim.stats.deaths} dead · {sim.stats.signed} clauses · {difficultyOf(sim).label} · seed {sim.seed}
         </p>
         <button
           type="button"

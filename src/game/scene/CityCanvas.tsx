@@ -3,6 +3,7 @@ import { Html, OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { FX_SETTINGS } from "@/game/fx";
 import { keyDown } from "@/game/input/keys";
 import { BUILDINGS, outdoorBand, outdoorTemp } from "@/game/sim/content";
 import {
@@ -600,9 +601,9 @@ export function CityCanvas() {
     <Canvas
       className="absolute inset-0 touch-none"
       shadows="soft"
-      dpr={fx === "high" ? [1, 1.75] : [1, 1.25]}
+      dpr={FX_SETTINGS[fx].dpr}
       camera={{ position: [14, 16, 14], fov: 38, near: 0.1, far: 120 }}
-      gl={{ antialias: fx === "low", powerPreference: "high-performance", stencil: false }}
+      gl={{ antialias: !FX_SETTINGS[fx].post, powerPreference: "high-performance", stencil: false }}
       onPointerMissed={() => useGame.getState().select(null)}
     >
       <SceneLighting quality={fx} clock={skyClock} />

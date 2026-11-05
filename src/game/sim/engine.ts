@@ -14,10 +14,12 @@ import {
   dayIndex,
   outdoorBand,
   outdoorTemp,
+  difficultyOf,
 } from "./content";
 import { hexDist, hexRange } from "./hex";
 import { clamp, rand, rollCount, seedRng } from "./rng";
 import type {
+  Difficulty,
   Deposit,
   Terrain,
   Building,
@@ -69,9 +71,9 @@ export function markChronicle(sim: SimState, axis: ChronicleAxis, delta: number,
 /** Fuel per hour for each pressure step, per ring of radius (plus the Kiln's own). High pressure drinks deep. */
 const PRESSURE_DRAW = [0, 1, 2, 3, 5];
 
-export function kilnBurn(pressure: number, radius: number): number {
+export function kilnBurn(pressure: number, radius: number, scale = 1): number {
   if (pressure <= 0) return 0;
-  return 2 * (PRESSURE_DRAW[Math.min(4, pressure)] ?? 5) * (radius + 1);
+  return Math.round(2 * (PRESSURE_DRAW[Math.min(4, pressure)] ?? 5) * (radius + 1) * scale);
 }
 
 export function heatLevel(sim: SimState): number {
@@ -182,7 +184,7 @@ export function evaluate(sim: SimState): EconomySnapshot {
       warmth: buildingWarmth(sim, b),
     });
   }
-  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius);
+  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
   return {
     rows,
     housingCap,
@@ -241,14 +243,22 @@ export function terrainForSeed(seed: number): Terrain {
   return (seed >>> 0) % 2 === 0 ? "pit" : "hill";
 }
 
-export function createGame(seed: number): SimState {
+export function createGame(seed: number, difficulty: Difficulty = "medium"): SimState {
+  const d = difficultyOf({ difficulty });
   const sim: SimState = {
     seed,
+    difficulty,
     terrain: terrainForSeed(seed),
     rng: seedRng(seed),
     minute: 6 * 60,
     speed: 1,
-    resources: { fuel: 460, timber: 260, iron: 46, raw: 70, meals: 320 },
+    resources: {
+      fuel: Math.round(460 * d.stores),
+      timber: Math.round(260 * d.stores),
+      iron: 46,
+      raw: 70,
+      meals: Math.round(320 * d.stores),
+    },
     pop: {
       healthy: { labourers: 46, specialists: 16, dependents: 18 },
       ill: emptyCohort(),
@@ -695,6 +705,7 @@ export function callVote(
 
 function weightedBands(sim: SimState): { ill: number; worsen: number; die: number; warmSlots: number } {
   const living = Math.max(1, livingCount(sim));
+  const cold = difficultyOf(sim).cold;
   const buckets: { slots: number; w: number }[] = [];
   const housing = sim.buildings
     .filter((b) => BUILDINGS[b.kind].housing > 0)
@@ -714,9 +725,9 @@ function weightedBands(sim: SimState): { ill: number; worsen: number; die: numbe
   for (const bucket of buckets) {
     const share = bucket.slots / living;
     const rates = bandRates(bucket.w);
-    ill += rates.ill * share;
-    worsen += rates.worsen * share;
-    die += rates.die * share;
+    ill += rates.ill * share * cold;
+    worsen += rates.worsen * share * cold;
+    die += rates.die * share * cold;
     if (bucket.w >= 1) warmSlots += bucket.slots;
   }
   return { ill, worsen, die, warmSlots };
@@ -748,9 +759,6 @@ function bandRates(w: number): { ill: number; worsen: number; die: number } {
   return { ill: 0, worsen: 0, die: 0 };
 }
 
-/** Chance per hour that one medic on shift cures someone. */
-const MEDIC_CURE_RATE = 0.3;
-
 function applyHealth(sim: SimState, medics: number): number {
   const rates = weightedBands(sim);
   const draw = () => rand(sim);
@@ -777,7 +785,7 @@ function applyHealth(sim: SimState, medics: number): number {
     shiftCohort(sim.pop.ill, sim.pop.healthy, cls, natural);
   }
   // Each medic on shift pulls someone back about one hour in three.
-  let cures = rollCount(medics, MEDIC_CURE_RATE, draw) * (hasClause(sim, "every-life") ? 2 : 1) * (hasClause(sim, "triage") ? 2 : 1);
+  let cures = rollCount(medics, difficultyOf(sim).cure, draw) * (hasClause(sim, "every-life") ? 2 : 1) * (hasClause(sim, "triage") ? 2 : 1);
   const cureOrder: ClassName[] = ["labourers", "specialists", "dependents"];
   for (const cls of cureOrder) {
     if (cures <= 0) break;
@@ -918,6 +926,9 @@ function applyMorale(sim: SimState, deaths: number, coldPeople: number): void {
   if (hasClause(sim, "thin-broth")) grievance += 3;
   if (hasClause(sim, "long-watch")) grievance += 2;
   if (hasClause(sim, "endless-watch")) grievance += 5;
+  // Difficulty scales only what this hour added, never what it eased.
+  const rise = grievance - sim.morale.grievance;
+  if (rise > 0) grievance = sim.morale.grievance + Math.round(rise * difficultyOf(sim).grievance);
   if (hasClause(sim, "childrens-hall")) resolve += 2;
   if (hasClause(sim, "still-house")) {
     if (sim.resources.fuel >= 1 && sim.resources.meals >= 1) {
@@ -976,7 +987,7 @@ function checkPromises(sim: SimState): void {
 }
 
 function payHeat(sim: SimState): void {
-  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius);
+  const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
   if (sim.kiln.pressure > 0 && sim.resources.fuel >= burn) {
     sim.resources.fuel -= burn;
     sim.kiln.running = true;

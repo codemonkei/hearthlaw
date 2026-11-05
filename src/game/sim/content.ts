@@ -1,4 +1,5 @@
 import type {
+  Difficulty,
   BuildingKind,
   ChronicleAxis,
   CircleId,
@@ -512,3 +513,29 @@ export const DEPOT_BONUS: Record<ResourceKey, number> = {
   raw: 300,
   meals: 600,
 };
+
+export interface DifficultyDef {
+  label: string;
+  blurb: string;
+  /** Scales the convoy's opening fuel, timber and meals. */
+  stores: number;
+  /** Scales how fast the cold makes people ill, worse, and dead. */
+  cold: number;
+  /** Chance per hour that a medic on shift cures someone. */
+  cure: number;
+  /** Scales the Kiln's fuel draw. */
+  burn: number;
+  /** Scales hourly grievance from cold, hunger and grief. */
+  grievance: number;
+}
+
+/** Medium is the tuned game; easy and hard bend the same rules rather than adding new ones. */
+export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
+  easy: { label: "Easy", blurb: "Fuller stores, a gentler cold, quicker healers.", stores: 1.25, cold: 0.6, cure: 0.45, burn: 0.85, grievance: 0.5 },
+  medium: { label: "Medium", blurb: "The watch as written.", stores: 1, cold: 1, cure: 0.3, burn: 1, grievance: 1 },
+  hard: { label: "Hard", blurb: "Thin stores, a cold that bites deep, a hungry Kiln.", stores: 0.9, cold: 1.25, cure: 0.25, burn: 1, grievance: 1.15 },
+};
+
+export function difficultyOf(sim: { difficulty?: Difficulty }): DifficultyDef {
+  return DIFFICULTY[sim.difficulty ?? "medium"];
+}

@@ -102,10 +102,14 @@ export type DealKind = "tribute-fuel" | "tribute-meals" | "promise";
 
 export type Terrain = "pit" | "hill";
 
+export type Difficulty = "easy" | "medium" | "hard";
+
 export interface SimState {
   seed: number;
   /** Pit: the city sinks toward the Kiln. Hill: it climbs to it. */
   terrain: Terrain;
+  /** Set at the start; old saves without it play as medium. */
+  difficulty?: Difficulty;
   /** Test mode: building, upgrades, heaters and research cost nothing. Off in normal play. */
   testMode?: boolean;
   rng: [number, number, number, number];
