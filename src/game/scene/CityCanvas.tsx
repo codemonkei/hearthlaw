@@ -37,6 +37,7 @@ import {
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
+import { KILN_STACK_TOP, Kiln } from "@/game/scene/Kiln";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -125,66 +126,6 @@ function CameraRig() {
         TWO: THREE.TOUCH.DOLLY_ROTATE,
       }}
     />
-  );
-}
-
-function Kiln({
-  strain,
-  pressure,
-  running,
-  terrain,
-}: {
-  strain: number;
-  pressure: number;
-  running: boolean;
-  terrain: Terrain;
-}) {
-  const light = useRef<THREE.PointLight>(null);
-  const core = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    const pulse = running ? 1.4 + pressure * 0.55 + Math.sin(t * (2 + strain / 400)) * 0.25 : 0.15;
-    if (light.current) light.current.intensity = pulse * 4.2;
-    if (core.current) {
-      const mat = core.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = pulse;
-    }
-  });
-  const y = hexToWorld(0, 0, terrain)[1] - SLAB_HALF;
-  return (
-    <group position={[0, y, 0]}>
-      <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[1.15, 1.35, 0.7, 8]} />
-        <meshStandardMaterial color="#2a3138" metalness={0.45} roughness={0.55} />
-      </mesh>
-      <mesh position={[0, 1.15, 0]} castShadow>
-        <cylinderGeometry args={[0.72, 0.95, 1.05, 10]} />
-        <meshStandardMaterial color="#3b4a5c" metalness={0.5} roughness={0.4} />
-      </mesh>
-      <mesh ref={core} position={[0, 1.15, 0]}>
-        <cylinderGeometry args={[0.38, 0.38, 0.7, 10]} />
-        <meshStandardMaterial color="#f2a541" emissive="#c8642b" emissiveIntensity={1.2} />
-      </mesh>
-      <mesh position={[0, 2.05, 0]} castShadow>
-        <cylinderGeometry args={[0.22, 0.48, 0.85, 8]} />
-        <meshStandardMaterial color="#c8642b" metalness={0.65} roughness={0.28} />
-      </mesh>
-      <mesh position={[0, 2.55, 0]}>
-        <sphereGeometry args={[0.16, 10, 8]} />
-        <meshStandardMaterial color="#f2a541" emissive="#ffb15c" emissiveIntensity={running ? 3.5 : 0.3} />
-      </mesh>
-      {[0, 1, 2, 3].map((i) => {
-        const a = (i / 4) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.95, 0.85, Math.sin(a) * 0.95]} rotation={[0, -a, Math.PI / 2]} castShadow>
-            <cylinderGeometry args={[0.07, 0.09, 0.7, 6]} />
-            <meshStandardMaterial color="#8d4b28" metalness={0.7} roughness={0.3} />
-          </mesh>
-        );
-      })}
-      <pointLight ref={light} position={[0, 2.2, 0]} color="#ff9a3c" distance={18} decay={2} />
-      <Embers origin={[0, 2.6, 0]} strength={running ? 0.45 + pressure * 0.18 : 0} />
-    </group>
   );
 }
 
@@ -545,7 +486,7 @@ function City() {
   const smoke: SmokeEmitter[] = [];
   const kilnTop = hexToWorld(0, 0, sim.terrain)[1] - SLAB_HALF;
   const kilnLevel = sim.kiln.running ? sim.kiln.pressure + (sim.kiln.surge ? 1 : 0) : 0;
-  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + 2.75, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
+  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + KILN_STACK_TOP + 0.05, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
 
   return (
     <group>
@@ -625,12 +566,14 @@ function City() {
       <HeatRing sim={sim} />
       <Smoke emitters={smoke} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
-      <Kiln
-        strain={sim.kiln.strain}
-        pressure={sim.kiln.pressure}
-        running={sim.kiln.running && sim.kiln.pressure > 0}
-        terrain={sim.terrain}
-      />
+      <group position={[0, kilnTop, 0]}>
+        <Kiln
+          strain={sim.kiln.strain}
+          pressure={sim.kiln.pressure}
+          surge={sim.kiln.surge}
+          running={sim.kiln.running && sim.kiln.pressure > 0}
+        />
+      </group>
     </group>
   );
 }
