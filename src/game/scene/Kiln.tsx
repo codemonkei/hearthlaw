@@ -253,6 +253,23 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
   const plinthTop = TILE_TOP + PLINTH_H * plinthScale[1];
   const bodyScale: [number, number, number] = presence ? PRESENCE_BODY : [1, 1, 1];
   const stackTop = kilnStackTop(features);
+  // Positions on the body, honouring presence: radius r and base height y.
+  const onBody = (a: number, r: number, y: number) => at(a, r * bodyScale[0], plinthTop + (y - PLINTH_TOP) * bodyScale[1]);
+  const strainLevel = Math.min(1, strain / 1000);
+  const strainSmoke: { pos: [number, number, number]; strength: number }[] = [];
+  if (strainLevel > 0.25) {
+    const k = (strainLevel - 0.25) / 0.75;
+    // A thick column from the stack: more plumes and bigger, denser puffs as strain climbs.
+    const plumes = 3 + Math.round(k * 3);
+    for (let i = 0; i < plumes; i++) {
+      const a = (i / plumes) * Math.PI * 2;
+      strainSmoke.push({ pos: [Math.sin(a) * 0.1, stackTop + 0.1 + i * 0.12, Math.cos(a) * 0.1], strength: 1.1 + k * 1.6 });
+    }
+    for (const a of GRATE_ANGLES) strainSmoke.push({ pos: onBody(a, DRUM_R + 0.05, DRUM_TOP + 0.05), strength: 0.6 + k * 1.1 });
+    if (strainLevel > 0.6) {
+      for (const a of PIPE_ANGLES) strainSmoke.push({ pos: onBody(a, DRUM_R + 0.1, GRATE_Y + 0.3), strength: 0.5 + k * 0.9 });
+    }
+  }
   // Everything that grows with presence is drawn in base units around the plinth top.
   const body = (y: number) => y - PLINTH_TOP;
 
@@ -508,6 +525,10 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
           </group>
         )}
       </group>
+
+      {/* Strain: the vessel chokes. Black smoke billows from the stack, leaks round the collar,
+          and above ~60% strain from the pipe flanges too. */}
+      {feedback && strainSmoke.length > 0 && <Smoke emitters={strainSmoke} color="#33373c" rise={1.35} />}
 
       {mechanism && surge && running && (
         <Smoke emitters={[{ pos: at(FRONT - 0.9, 0.7 * bodyScale[0], plinthTop + (DRUM_TOP + 0.45 - PLINTH_TOP) * bodyScale[1]), strength: 1 }]} />

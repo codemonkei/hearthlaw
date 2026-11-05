@@ -469,7 +469,17 @@ export interface SmokeEmitter {
 }
 
 /** Camera-facing puffs that rise, drift downwind, swell and fade. One draw call for every chimney. */
-export function Smoke({ emitters }: { emitters: SmokeEmitter[] }) {
+export function Smoke({
+  emitters,
+  color = "#8d97a3",
+  rise = 1,
+}: {
+  emitters: SmokeEmitter[];
+  /** Puff colour: light grey chimney smoke by default; darker for soot. */
+  color?: string;
+  /** How fast puffs climb and cycle, relative to chimney smoke. */
+  rise?: number;
+}) {
   const count = Math.max(1, emitters.length * PUFFS);
   const mesh = useRef<THREE.InstancedMesh>(null);
   const geo = useMemo(() => {
@@ -491,6 +501,9 @@ export function Smoke({ emitters }: { emitters: SmokeEmitter[] }) {
   );
   useEffect(() => () => geo.dispose(), [geo]);
   useEffect(() => () => mat.dispose(), [mat]);
+  useEffect(() => {
+    (mat.uniforms.uColor!.value as THREE.Color).set(color);
+  }, [mat, color]);
   const m = useMemo(() => new THREE.Matrix4(), []);
   const p = useMemo(() => new THREE.Vector3(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
@@ -503,7 +516,7 @@ export function Smoke({ emitters }: { emitters: SmokeEmitter[] }) {
     emitters.forEach((e, ei) => {
       for (let k = 0; k < PUFFS; k++) {
         const i = ei * PUFFS + k;
-        const age = (t * 0.16 + k / PUFFS + ei * 0.137) % 1;
+        const age = (t * 0.16 * rise + k / PUFFS + ei * 0.137) % 1;
         const wobble = Math.sin(t * 0.9 + i) * 0.08;
         // The storm flattens the plume and drags it downwind.
         const gust = 0.9 + weather.storm * 4;
