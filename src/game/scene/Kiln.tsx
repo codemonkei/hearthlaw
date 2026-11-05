@@ -53,6 +53,9 @@ const PIPE_ANGLES = [0, 1, 2, 3].map((i) => (i / 4) * Math.PI * 2);
 const GRATE_ANGLES = PIPE_ANGLES.map((a) => a + Math.PI / 4);
 const FRONT = Math.PI / 4;
 
+/** Embers in the air at each pressure step (0 = banked … 4); a surge throws 60 more. */
+const EMBERS_BY_PRESSURE = [0, 40, 85, 140, 210];
+
 const at = (a: number, r: number, y: number): [number, number, number] => [Math.sin(a) * r, y, Math.cos(a) * r];
 
 /** Height of the smokestack mouth for the active features: smoke and embers start here. */
@@ -632,7 +635,11 @@ export function Kiln(props: { strain: number; pressure: number; surge: boolean; 
       )}
 
       <pointLight ref={light} position={[0, plinthTop + (GRATE_Y + 0.2 - PLINTH_TOP) * bodyScale[1], 0]} color="#ff9a3c" distance={presence ? 21 : 18} decay={2} />
-      <Embers origin={[0, stackTop, 0]} strength={running ? 0.45 + pressure * 0.18 + (surge ? 0.3 : 0) : 0} />
+      <Embers
+        origin={[0, stackTop, 0]}
+        strength={running ? 0.45 + pressure * 0.18 + (surge ? 0.3 : 0) : 0}
+        amount={running ? (EMBERS_BY_PRESSURE[pressure] ?? 210) + (surge ? 60 : 0) : 0}
+      />
     </group>
   );
 }

@@ -380,9 +380,21 @@ export function GroundMist() {
 }
 
 /** Sparks rising from the Kiln's crown. Bright enough to bloom. */
-export function Embers({ origin, strength }: { origin: [number, number, number]; strength: number }) {
+/** The most embers any fire can throw; `amount` picks how many of them are alive. */
+const MAX_EMBERS = 300;
+
+export function Embers({
+  origin,
+  strength,
+  amount = 70,
+}: {
+  origin: [number, number, number];
+  strength: number;
+  /** How many embers are in the air (0…300). A hotter fire throws more, higher and wider. */
+  amount?: number;
+}) {
   const ref = useRef<THREE.Points>(null);
-  const count = 70;
+  const count = MAX_EMBERS;
   const seeds = useMemo(
     () => Array.from({ length: count }, (_, i) => ({ phase: (i * 0.618) % 1, sway: 0.4 + ((i * 0.37) % 1) * 0.6, a: i * 2.4 })),
     [],
@@ -412,17 +424,21 @@ export function Embers({ origin, strength }: { origin: [number, number, number];
     const pts = ref.current;
     if (!pts) return;
     mat.opacity = Math.min(1, strength);
-    pts.visible = strength > 0.05;
+    const alive = Math.max(0, Math.min(count, Math.round(amount)));
+    pts.visible = strength > 0.05 && alive > 0;
+    geo.setDrawRange(0, alive);
+    // More embers also means a livelier fire: they climb higher and spread wider.
+    const vigour = alive / 120;
     const t = clock.elapsedTime;
     const attr = geo.getAttribute("position") as THREE.BufferAttribute;
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < alive; i++) {
       const s = seeds[i]!;
       const age = (t * 0.22 * (0.7 + s.sway) + s.phase) % 1;
-      const rad = 0.15 + age * 0.9 * s.sway;
+      const rad = 0.15 + age * (0.75 + vigour * 0.35) * s.sway;
       attr.setXYZ(
         i,
         origin[0] + Math.cos(s.a + t * 0.8) * rad + age * (0.6 + weather.storm * 3),
-        origin[1] + age * 4.2,
+        origin[1] + age * (3.6 + vigour * 1.2),
         origin[2] + Math.sin(s.a + t * 0.8) * rad,
       );
     }
