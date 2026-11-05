@@ -49,9 +49,9 @@ function tileModel(sim: SimState, q: number, r: number): string {
   if (q === 0 && r === 0) return "stone";
   const b = t.buildingId != null ? sim.buildings.find((x) => x.id === t.buildingId) : undefined;
   if (b) {
-    const kit = kenneyBuildingFor(b.kind);
-    if (kit) return kit;
+    // Buildings bring their own models (Town.tsx); the kit only supplies the ground under them.
     if (b.kind === "wood") return "dirt-lumber";
+    if (b.kind === "peat") return "dirt";
     return "grass";
   }
   const live = liveDeposit(t);

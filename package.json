@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/game/sim/smoke.ts",
     "models:nature": "node scripts/build-nature-models.mjs",
-    "models:kenney": "node scripts/build-kenney-models.mjs"
+    "models:kenney": "node scripts/build-kenney-models.mjs",
+    "models:town": "node scripts/build-town-models.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

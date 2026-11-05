@@ -19,6 +19,8 @@ export interface Placement {
   pos: [number, number, number];
   rotY: number;
   scale: number;
+  /** A full world transform; when set it is used instead of pos/rotY/scale. */
+  matrix?: THREE.Matrix4;
 }
 
 /** Load a pack and collect each model's meshes. `material` may replace or adapt each source material. */
@@ -54,6 +56,7 @@ export function Instanced({ parts, items }: { parts: Part[]; items: Placement[] 
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     return items.map((it) => {
+      if (it.matrix) return it.matrix;
       q.setFromAxisAngle(up, it.rotY);
       return new THREE.Matrix4().compose(new THREE.Vector3(...it.pos), q, new THREE.Vector3(it.scale, it.scale, it.scale));
     });

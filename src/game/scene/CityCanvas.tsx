@@ -37,7 +37,8 @@ import {
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
-import { KenneyTiles, kenneyBuildingFor } from "@/game/scene/Kenney";
+import { KenneyTiles } from "@/game/scene/Kenney";
+import { TownBuildings } from "@/game/scene/Town";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -474,6 +475,28 @@ function SimpleNature({ sim }: { sim: SimState }) {
   );
 }
 
+/** The original code-drawn buildings, used while the town parts load (or if they cannot). */
+function SimpleBuildings({ sim, selectedId }: { sim: SimState; selectedId: number | null }) {
+  const smoke: SmokeEmitter[] = [];
+  const groups = sim.buildings.map((b) => {
+    const [x, top, z] = hexToWorld(b.q, b.r, sim.terrain);
+    const y = top - SLAB_HALF;
+    const flue = chimney(b.kind);
+    if (flue) smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
+    return (
+      <group key={b.id} position={[x, y, z]}>
+        <Structure kind={b.kind} warmth={buildingWarmth(sim, b)} selected={b.id === selectedId} />
+      </group>
+    );
+  });
+  return (
+    <group>
+      {groups}
+      <Smoke emitters={smoke} />
+    </group>
+  );
+}
+
 /** Fractional hour and outdoor temperature for the sky, read every frame. */
 function skyClock() {
   const sim = useGame.getState().sim;
@@ -530,9 +553,6 @@ function City() {
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
         const deposit = liveDeposit(tile);
-        const kit = kenney && building ? kenneyBuildingFor(building.kind) : null;
-        const flue = kit ? { at: [0, 1.2, 0] as [number, number, number], strength: 0.7 } : building ? chimney(building.kind) : null;
-        if (flue) smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
         // `tint` is any state colour (heat, placement fit, hover); the classic tiles paint it
         // straight onto the column, the Kenney tiles show it on a thin plate above the kit tile.
         let tint: string | null = null;
@@ -541,7 +561,7 @@ function City() {
         // Occupied tiles just dim; red is kept for open ground this building cannot use.
         if (fit && fit.fit !== "ok") tint = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
         const hovered = hover === key;
-        if (kenney && building && building.id === selectedId) tint = "#f2a541";
+        if (building && building.id === selectedId) tint = "#f2a541";
         if (hovered) {
           tint = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
           const at: [number, number, number] = [x, top + (building || isKiln ? 1.7 : 1.1), z];
@@ -589,9 +609,6 @@ function City() {
             )}
             {/* The kit has no peat: keep our cut seams on its dirt tile. Its rock tile already reads as scrap. */}
             {!building && (deposit === "peat" || (!kenney && deposit === "scrap")) && <DepositProp deposit={deposit} />}
-            {building && !kit && (
-              <Structure kind={building.kind} warmth={buildingWarmth(sim, building)} selected={building.id === selectedId} />
-            )}
             {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (
               <mesh position={[0, 0.45, 0]}>
                 <boxGeometry args={[0.7, 0.5, 0.6]} />
@@ -601,6 +618,7 @@ function City() {
           </group>
         );
       })}
+      <TownBuildings sim={sim} fallback={<SimpleBuildings sim={sim} selectedId={selectedId} />} />
       <HeatRing sim={sim} />
       <Smoke emitters={smoke} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}

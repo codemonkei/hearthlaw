@@ -11,4 +11,9 @@
   (toggle with K).* Tiles and buildings are built into `public/models/kenney-hex.glb` by
   `npm run models:kenney`, with the kit's own snow palette regraded to a harsher winter.
 
+- **Holiday Kit**, **Fantasy Town Kit 2.0** and **Space Kit** by [Kenney](https://kenney.nl) — CC0 1.0.
+  Modular parts every building is assembled from (log cabins, timber, stone, chimneys, pipes,
+  the stalled convoy), built into `public/models/town.glb` by `npm run models:town` and graded
+  to the same harsh winter palette. Blueprints live in `src/game/scene/Town.tsx`.
+
 Everything else in the scene is drawn in code.

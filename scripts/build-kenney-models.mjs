@@ -15,10 +15,10 @@ import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, mergeDocuments, meshopt, prune } from "@gltf-transform/functions";
 import { MeshoptEncoder } from "meshoptimizer";
+import { gradePalette } from "./lib/winter-palette.mjs";
 
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip");
-const { PNG } = require("pngjs");
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1")), "..");
 const OUT = path.join(ROOT, "public", "models", "kenney-hex.glb");
@@ -52,75 +52,6 @@ function findZip() {
   const hit = readdirSync(dir).find((f) => /kenney_hexagon-kit/i.test(f) && f.endsWith(".zip"));
   if (!hit) throw new Error(`No kenney_hexagon-kit zip in ${dir}. Pass its path as an argument.`);
   return path.join(dir, hit);
-}
-
-function rgbToHsl(r, g, b) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h;
-  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  return [h * 60, s, l];
-}
-
-function hslToRgb(h, s, l) {
-  const k = (n) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return [f(0), f(8), f(4)];
-}
-
-/** Grade one palette pixel toward a cold, worn, low-saturation winter. */
-function harsh(r, g, b) {
-  let [h, s, l] = rgbToHsl(r / 255, g / 255, b / 255);
-  const warm = h < 50 || h > 320;
-  if (s < 0.12 && l > 0.75) {
-    // Snow and frost: cold, a little dimmer so sunlit ground does not glare.
-    h = 212;
-    s = 0.1;
-    l = l * 0.93;
-  } else if (h >= 170 && h < 250) {
-    // Water and bright blues: grey ice.
-    h = 205;
-    s = s * 0.35;
-    l = Math.min(l, 0.72) * 0.95;
-  } else if (h >= 250 && h <= 320) {
-    // Purples and lavenders: slate.
-    h = 222;
-    s = s * 0.3;
-    l = l * 0.8;
-  } else if (warm && l < 0.45) {
-    // Dark browns: soot-stained timber.
-    s = s * 0.45;
-    l = l * 0.75;
-  } else if (warm) {
-    // Red roofs, orange tile sides, peach: rust, frozen earth, weathered boards.
-    h = h < 50 ? Math.max(12, h * 0.8) : h;
-    s = s * 0.32;
-    l = l * 0.52;
-  } else {
-    // Yellows, greens, greys: muted and cooled.
-    s = s * 0.35;
-    l = l * 0.85;
-  }
-  const [rr, gg, bb] = hslToRgb(h, Math.max(0, Math.min(1, s)), Math.max(0, Math.min(1, l)));
-  return [Math.round(rr * 255), Math.round(gg * 255), Math.round(bb * 255)];
-}
-
-function gradePalette(pngBuffer) {
-  const png = PNG.sync.read(pngBuffer);
-  for (let i = 0; i < png.data.length; i += 4) {
-    const [r, g, b] = harsh(png.data[i], png.data[i + 1], png.data[i + 2]);
-    png.data[i] = r;
-    png.data[i + 1] = g;
-    png.data[i + 2] = b;
-  }
-  return PNG.sync.write(png);
 }
 
 async function main() {
