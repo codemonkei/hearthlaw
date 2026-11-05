@@ -527,14 +527,25 @@ function Notice({ text }: { text: string }) {
   );
 }
 
-function Sheet({ title, kicker, children }: { title: string; kicker: string; children: ReactNode }) {
+function Sheet({
+  title,
+  kicker,
+  wide = false,
+  children,
+}: {
+  title: string;
+  kicker: string;
+  /** Two-column books need room for their detail column. */
+  wide?: boolean;
+  children: ReactNode;
+}) {
   const setPanel = useGame((s) => s.setPanel);
   const ref = useRef<HTMLElement>(null);
   const top = useClearOfTopBar(ref);
   return (
     <section
       ref={ref}
-      className="pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto md:w-96"
+      className={`pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto ${wide ? "md:w-[44rem] md:max-w-[calc(100%-4.5rem)]" : "md:w-96"}`}
       style={{ top }}
     >
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -565,8 +576,8 @@ function CharterBook() {
   const gate = clauseGate(sim, clauseId);
   const signed = hasClause(sim, clauseId);
   return (
-    <Sheet title="The Charter" kicker="Book I · Survival">
-      <div className="grid gap-3 md:grid-cols-[11rem_1fr]">
+    <Sheet title="The Charter" kicker="Book I · Survival" wide>
+      <div className="grid gap-4 md:grid-cols-[11rem_1fr]">
         <div className="flex gap-1 overflow-x-auto md:flex-col">
           {CLAUSE_ORDER.map((id) => (
             <button
@@ -581,9 +592,9 @@ function CharterBook() {
           ))}
         </div>
         <div>
-          <h3 className="hl-display text-xl">{def.name}</h3>
+          <h3 className="hl-display text-2xl leading-tight">{def.name}</h3>
           <p className="mt-1 text-sm leading-relaxed text-mist">{def.summary}</p>
-          <p className="mt-2 text-sm text-snow">{def.effect}</p>
+          <p className="mt-2 text-sm leading-relaxed text-snow">{def.effect}</p>
           <p className="mt-2 text-xs text-ember">
             Chronicle · {def.axis} {def.delta > 0 ? `+${def.delta}` : def.delta}
           </p>
@@ -638,15 +649,16 @@ function CircleRow({
   onDeal: (d: DealKind | null) => void;
 }) {
   return (
-    <div className="rounded-lg bg-panel-2 px-2 py-2">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span>{CIRCLE_NAME[circle]}</span>
-        <span className="text-xs text-mist">
-          {stance} · {votes}/{seats}
+    <div className="rounded-lg bg-panel-2 px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="hl-display text-base">{CIRCLE_NAME[circle]}</span>
+        <span className="shrink-0 whitespace-nowrap text-xs">
+          <span className={stance === "for" ? "text-ember" : stance === "against" ? "text-blood" : "text-mist"}>{stance}</span>
+          <span className="text-mist"> · {votes}/{seats} seats</span>
         </span>
       </div>
-      <p className="text-xs text-mist">{CIRCLE_BLURB[circle]}</p>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <p className="mt-0.5 text-xs leading-relaxed text-mist">{CIRCLE_BLURB[circle]}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <DealChip label="40 fuel" active={deal === "tribute-fuel"} onClick={() => onDeal("tribute-fuel")} />
         <DealChip label="30 meals" active={deal === "tribute-meals"} onClick={() => onDeal("tribute-meals")} />
         <DealChip label="Promise" active={deal === "promise"} onClick={() => onDeal("promise")} />
