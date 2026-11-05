@@ -93,6 +93,35 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
     s.closePath();
     return new THREE.ShapeGeometry(s);
   }, []);
+  /** A snow cap along the ridge: a thin layer that follows the roof pitch, thickest at the top. */
+  const ridgeSnow = useMemo(() => {
+    const tan = Math.tan(slope.angle);
+    const a = 0.17;
+    const roofAt = (x: number) => RIDGE + 0.012 - Math.abs(x) * tan;
+    const s = new THREE.Shape();
+    s.moveTo(-a, roofAt(-a));
+    s.lineTo(-a * 0.55, roofAt(-a * 0.55) + 0.028);
+    s.lineTo(0, RIDGE + 0.05);
+    s.lineTo(a * 0.55, roofAt(a * 0.55) + 0.028);
+    s.lineTo(a, roofAt(a));
+    s.lineTo(0, RIDGE + 0.012);
+    s.closePath();
+    const g = new THREE.ExtrudeGeometry(s, { depth: L + 0.04, bevelEnabled: false });
+    g.translate(0, 0, -(L + 0.04) / 2);
+    return g;
+  }, [slope.angle]);
+  /** Soft heaps of snow at the corners and along the walls. */
+  const drifts = useMemo(
+    () =>
+      [
+        [W / 2 + 0.05, -L / 2 + 0.06, 0.13],
+        [W / 2 + 0.06, 0.12, 0.1],
+        [-W / 2 - 0.05, -L / 2 + 0.1, 0.12],
+        [-W / 2 - 0.05, 0.22, 0.09],
+        [0.12, -L / 2 - 0.06, 0.11],
+      ] as [number, number, number][],
+    [],
+  );
   const ropes = useMemo(() => {
     const out: { a: THREE.Vector3; b: THREE.Vector3 }[] = [];
     for (const side of [-1, 1]) {
@@ -149,11 +178,6 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
             </mesh>
           )}
           {/* Snow settled along the upper part of each slope. */}
-          {/* The slopes are mirrored, so "toward the ridge" is -x on one side and +x on the other. */}
-          <mesh position={[-side * slope.length * 0.28, 0.015, 0]}>
-            <boxGeometry args={[slope.length * 0.42, 0.02, L + 0.06]} />
-            <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
-          </mesh>
         </group>
       ))}
 
@@ -205,9 +229,12 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
       </mesh>
 
       {/* Snow drifted against the walls, a crate and firewood by the door. */}
-      {[-1, 1].map((side) => (
-        <mesh key={`drift-${side}`} position={[side * (W / 2 + 0.05), 0.02, -0.08]} rotation={[0, 0, side * 0.5]} scale={[1, 0.6, 1]}>
-          <boxGeometry args={[0.12, 0.08, L * 0.8]} />
+      <mesh geometry={ridgeSnow} castShadow receiveShadow>
+        <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
+      </mesh>
+      {drifts.map(([x, z, r], i) => (
+        <mesh key={`drift-${i}`} position={[x, r * 0.15, z]} rotation={[0, i * 1.3, 0]} scale={[1.25, 0.45, 1]} castShadow receiveShadow>
+          <icosahedronGeometry args={[r, 1]} />
           <meshStandardMaterial color={SNOW} roughness={0.9} {...FLAT} />
         </mesh>
       ))}

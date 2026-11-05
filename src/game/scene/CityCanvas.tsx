@@ -143,7 +143,7 @@ function Window({ position, warmth }: { position: [number, number, number]; warm
 /** Where each building's chimney mouth sits, relative to its tile group, and how thick its smoke is. */
 function chimney(kind: BuildingKind): { at: [number, number, number]; strength: number } | null {
   if (kind === "vent") return null;
-  if (kind === "tent") return { at: tentFlue(), strength: 0.3 };
+  if (kind === "tent") return { at: tentFlue(), strength: 0.75 };
   if (kind === "hut") return { at: [0.72 * 0.25, 0.95, 0], strength: 0.7 };
   if (kind === "longhouse") return { at: [1.15 * 0.25, 0.95, 0], strength: 0.9 };
   const tall = kind === "survey" || kind === "infirmary";
