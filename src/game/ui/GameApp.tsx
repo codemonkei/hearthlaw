@@ -108,11 +108,11 @@ function Title({
       {/* Scrolls only if a very short screen still cannot hold it all. */}
       <div className="relative z-10 h-full overflow-y-auto">
       <div
-        className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-5 py-6 sm:justify-center sm:py-8"
+        className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-5 py-6 sm:justify-center"
         style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
       >
         <p className="hl-kicker">First Watch · The Kindling</p>
-        <h1 className="hl-display mt-2 text-5xl leading-none text-snow sm:mt-3 sm:text-8xl">Hearthlaw</h1>
+        <h1 className="hl-display mt-2 text-5xl leading-none text-snow sm:mt-3 sm:text-7xl">Hearthlaw</h1>
         <p className="mt-3 max-w-xl text-base leading-snug text-mist sm:mt-4 sm:text-xl">
           Keep the fire. Write the law. Live with both.
         </p>
@@ -130,17 +130,19 @@ function Title({
         <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:flex sm:gap-3">
           <button
             type="button"
-            className="min-h-12 rounded-xl bg-ember px-4 text-base font-medium text-ink sm:px-5"
+            className="min-h-12 rounded-xl bg-ember px-4 py-1.5 text-base font-medium text-ink sm:px-5"
             onClick={() => onStart((Math.random() * 0xffffffff) >>> 0)}
           >
             Take the Charter
+            <span className="block text-xs font-normal opacity-75">A new valley each time</span>
           </button>
           <button
             type="button"
-            className="min-h-12 rounded-xl border border-line px-4 text-base text-snow sm:px-5"
+            className="min-h-12 rounded-xl border border-line px-4 py-1.5 text-base text-snow sm:px-5"
             onClick={() => onStart(192011)}
           >
             The first valley
+            <span className="block text-xs text-mist">Same map every time</span>
           </button>
           {saved && (
             <button
