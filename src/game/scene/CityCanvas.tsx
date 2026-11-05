@@ -26,6 +26,7 @@ const SLAB_HALF = 0.1;
 /** How far each tile column reaches below the ground plane. */
 const COLUMN_SINK = 0.3;
 import { useGame } from "@/game/store";
+import { Embers, GroundMist, PostFx, SceneLighting, Smoke, type SmokeEmitter } from "@/game/scene/Atmosphere";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -139,6 +140,9 @@ function Snow() {
       let y = attr.getY(i) - d * (1.1 + (i % 7) * 0.18);
       if (y < 0) y = 16 + (i % 5);
       attr.setY(i, y);
+      let x = attr.getX(i) + d * (0.9 + (i % 5) * 0.25);
+      if (x > 23) x = -23;
+      attr.setX(i, x);
     }
     attr.needsUpdate = true;
   });
@@ -165,7 +169,7 @@ function Kiln({
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     const pulse = running ? 1.4 + pressure * 0.55 + Math.sin(t * (2 + strain / 400)) * 0.25 : 0.15;
-    if (light.current) light.current.intensity = pulse * 3.2;
+    if (light.current) light.current.intensity = pulse * 4.2;
     if (core.current) {
       const mat = core.current.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = pulse;
@@ -192,7 +196,7 @@ function Kiln({
       </mesh>
       <mesh position={[0, 2.55, 0]}>
         <sphereGeometry args={[0.16, 10, 8]} />
-        <meshStandardMaterial color="#f2a541" emissive="#f2a541" emissiveIntensity={1.4} />
+        <meshStandardMaterial color="#f2a541" emissive="#ffb15c" emissiveIntensity={running ? 3.5 : 0.3} />
       </mesh>
       {[0, 1, 2, 3].map((i) => {
         const a = (i / 4) * Math.PI * 2;
@@ -203,9 +207,30 @@ function Kiln({
           </mesh>
         );
       })}
-      <pointLight ref={light} position={[0, 2.2, 0]} color="#f2a541" distance={16} decay={2} />
+      <pointLight ref={light} position={[0, 2.2, 0]} color="#ff9a3c" distance={18} decay={2} />
+      <Embers origin={[0, 2.6, 0]} strength={running ? 0.45 + pressure * 0.18 : 0} />
     </group>
   );
+}
+
+/** A lit window: bright amber when the room is warm, a dull ember when it is not. */
+function Window({ position, warmth }: { position: [number, number, number]; warmth: number }) {
+  return (
+    <mesh position={position}>
+      <boxGeometry args={[0.15, 0.12, 0.02]} />
+      <meshStandardMaterial color="#2a1a10" emissive="#ffb15c" emissiveIntensity={warmth >= 1 ? 3 : warmth >= 0 ? 1.4 : 0.4} />
+    </mesh>
+  );
+}
+
+/** Where each building's chimney mouth sits, relative to its tile group, and how thick its smoke is. */
+function chimney(kind: BuildingKind): { at: [number, number, number]; strength: number } | null {
+  if (kind === "tent" || kind === "vent") return null;
+  if (kind === "hut") return { at: [0.72 * 0.25, 0.95, 0], strength: 0.7 };
+  if (kind === "longhouse") return { at: [1.15 * 0.25, 0.95, 0], strength: 0.9 };
+  const tall = kind === "survey" || kind === "infirmary";
+  const strength = kind === "ironworks" || kind === "mess" ? 1 : tall ? 0.6 : 0.35;
+  return { at: [0.22, tall ? 1.32 : 0.97, 0], strength };
 }
 
 function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: number; selected: boolean }) {
@@ -236,6 +261,9 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
           <boxGeometry args={[0.08, 0.28, 0.08]} />
           <meshStandardMaterial color={stone} />
         </mesh>
+        {(kind === "longhouse" ? [-0.3, 0.3] : [0]).map((wx) => (
+          <Window key={wx} position={[wx, 0.3, 0.315]} warmth={warmth} />
+        ))}
       </group>
     );
   }
@@ -248,7 +276,7 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
         </mesh>
         <mesh position={[0, 0.95, 0]}>
           <sphereGeometry args={[0.12, 8, 8]} />
-          <meshStandardMaterial color="#f2a541" emissive="#f2a541" emissiveIntensity={0.8} />
+          <meshStandardMaterial color="#f2a541" emissive="#ffb15c" emissiveIntensity={2.6} />
         </mesh>
       </group>
     );
@@ -264,6 +292,9 @@ function Structure({ kind, warmth, selected }: { kind: BuildingKind; warmth: num
         <boxGeometry args={[0.12, tall ? 0.7 : 0.4, 0.12]} />
         <meshStandardMaterial color="#2c3338" />
       </mesh>
+      {(kind === "mess" || kind === "infirmary" || kind === "survey" || kind === "ironworks") && (
+        <Window position={[-0.18, 0.38, 0.355]} warmth={warmth} />
+      )}
       {kind === "wood" && (
         <mesh position={[-0.35, 0.55, 0.2]} rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.08, 0.08, 0.55, 6]} />
@@ -460,6 +491,10 @@ function City() {
   const temp = outdoorTemp(sim.minute);
   const band = outdoorBand(temp);
   const hoverInfo: { label: Label | null } = { label: null };
+  const smoke: SmokeEmitter[] = [];
+  const kilnTop = hexToWorld(0, 0, sim.terrain)[1] - SLAB_HALF;
+  const kilnLevel = sim.kiln.running ? sim.kiln.pressure + (sim.kiln.surge ? 1 : 0) : 0;
+  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + 2.75, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
 
   return (
     <group>
@@ -489,6 +524,8 @@ function City() {
         const w = band + src;
         const building = sim.buildings.find((b) => b.id === tile.buildingId) ?? null;
         const deposit = liveDeposit(tile);
+        const flue = building ? chimney(building.kind) : null;
+        if (flue) smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
         let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
         if (heat && !isKiln) color = heatHex(building ? buildingWarmth(sim, building) : w);
         const fit: PlacementFit | null = buildKind && !isKiln ? assessPlacement(sim, buildKind, tile.q, tile.r) : null;
@@ -547,6 +584,7 @@ function City() {
         );
       })}
       <HeatRing sim={sim} />
+      <Smoke emitters={smoke} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <Kiln
         strain={sim.kiln.strain}
@@ -560,38 +598,24 @@ function City() {
 
 export function CityCanvas() {
   const [ready, setReady] = useState(false);
+  const fx = useGame((s) => s.fx);
   useEffect(() => setReady(true), []);
   if (!ready) return <div className="absolute inset-0 bg-ink" />;
   return (
     <Canvas
       className="absolute inset-0 touch-none"
-      shadows
-      dpr={[1, 1.6]}
+      shadows="soft"
+      dpr={fx === "high" ? [1, 1.75] : [1, 1.25]}
       camera={{ position: [14, 16, 14], fov: 38, near: 0.1, far: 120 }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
+      gl={{ antialias: fx === "low", powerPreference: "high-performance", stencil: false }}
       onPointerMissed={() => useGame.getState().select(null)}
     >
-      <color attach="background" args={["#1a242e"]} />
-      <fog attach="fog" args={["#1a242e", 22, 52]} />
-      <hemisphereLight args={["#9fb3c8", "#3b4a5c", 0.55]} />
-      <ambientLight intensity={0.28} />
-      <directionalLight
-        position={[12, 22, 8]}
-        intensity={1.25}
-        color="#e7eef5"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-near={2}
-        shadow-camera-far={50}
-        shadow-camera-left={-16}
-        shadow-camera-right={16}
-        shadow-camera-top={16}
-        shadow-camera-bottom={-16}
-      />
+      <SceneLighting quality={fx} />
       <City />
       <Snow />
+      <GroundMist />
       <CameraRig />
+      <PostFx quality={fx} />
     </Canvas>
   );
 }

@@ -1,3 +1,4 @@
+import { detectFxQuality, type FxQuality } from "./fx";
 import { create } from "zustand";
 import { syncKiln, unlockAudio } from "./audio";
 import {
@@ -19,6 +20,18 @@ import {
 import { loadSim, saveSim } from "./sim/save";
 import type { BuildingKind, CircleId, ClauseId, DealKind, ResearchId, SimState } from "./sim/types";
 
+const FX_KEY = "hearthlaw.fx";
+
+function loadFx(): FxQuality {
+  try {
+    const v = window.localStorage.getItem(FX_KEY);
+    if (v === "high" || v === "low") return v;
+  } catch {
+    /* fall through to the device guess */
+  }
+  return detectFxQuality();
+}
+
 export type PanelId = "charter" | "chronicle" | "help" | "survey" | null;
 
 interface Result {
@@ -34,6 +47,8 @@ interface GameStore {
   selectedId: number | null;
   panel: PanelId;
   heat: boolean;
+  /** Visual quality: post-processing, shadow resolution, pixel ratio. Presentation only. */
+  fx: FxQuality;
   clauseId: ClauseId | null;
   deals: Partial<Record<CircleId, DealKind | null>>;
   notice: string | null;
@@ -49,6 +64,7 @@ interface GameStore {
   select: (id: number | null) => void;
   setPanel: (panel: PanelId) => void;
   toggleHeat: () => void;
+  toggleFx: () => void;
   focusClause: (id: ClauseId | null) => void;
   setDeal: (circle: CircleId, deal: DealKind | null) => void;
   tryPlace: (q: number, r: number) => void;
@@ -101,6 +117,7 @@ export const useGame = create<GameStore>((set, get) => {
     selectedId: null,
     panel: null,
     heat: false,
+    fx: loadFx(),
     clauseId: null,
     deals: {},
     notice: null,
@@ -196,6 +213,15 @@ export const useGame = create<GameStore>((set, get) => {
         rev: get().rev + 1,
       }),
     toggleHeat: () => set({ heat: !get().heat, rev: get().rev + 1 }),
+    toggleFx: () => {
+      const fx: FxQuality = get().fx === "high" ? "low" : "high";
+      try {
+        window.localStorage.setItem(FX_KEY, fx);
+      } catch {
+        /* storage blocked — the choice lasts this session */
+      }
+      set({ fx });
+    },
     focusClause: (id) => set({ clauseId: id, deals: {}, rev: get().rev + 1 }),
     setDeal: (circle, deal) => {
       const deals = { ...get().deals };

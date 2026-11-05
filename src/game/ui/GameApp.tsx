@@ -15,6 +15,7 @@ export function GameApp() {
   const togglePause = useGame((s) => s.togglePause);
   const setSpeed = useGame((s) => s.setSpeed);
   const toggleHeat = useGame((s) => s.toggleHeat);
+  const toggleFx = useGame((s) => s.toggleFx);
   const setPanel = useGame((s) => s.setPanel);
   const [saved, setSaved] = useState(false);
 
@@ -34,6 +35,7 @@ export function GameApp() {
       else if (e.code === "Digit2") setSpeed(2);
       else if (e.code === "Digit3") setSpeed(4);
       else if (e.code === "KeyO") toggleHeat();
+      else if (e.code === "KeyG") toggleFx();
       else if (e.code === "Escape") setPanel(null);
       else if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
         e.preventDefault();
@@ -45,7 +47,7 @@ export function GameApp() {
       window.removeEventListener("keydown", onKey);
       clearKeys();
     };
-  }, [boot, setPanel, setSpeed, toggleHeat, togglePause]);
+  }, [boot, setPanel, setSpeed, toggleFx, toggleHeat, togglePause]);
 
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-ink text-snow">

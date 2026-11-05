@@ -10,6 +10,7 @@ import {
   Play,
   ScrollText,
   Snowflake,
+  Sparkles,
   TreePine,
   Users,
   Utensils,
@@ -225,6 +226,8 @@ function SideButtons() {
   const toggleHeat = useGame((s) => s.toggleHeat);
   const toggleMute = useGame((s) => s.toggleMute);
   const heat = useGame((s) => s.heat);
+  const fx = useGame((s) => s.fx);
+  const toggleFx = useGame((s) => s.toggleFx);
   const sim = useGame.getState().sim!;
   const Btn = ({
     label,
@@ -259,6 +262,9 @@ function SideButtons() {
       </Btn>
       <Btn label="Heat overlay" onClick={toggleHeat} active={heat}>
         <Eye className="size-5" />
+      </Btn>
+      <Btn label={fx === "high" ? "Graphics: high (G)" : "Graphics: low (G)"} onClick={toggleFx} active={fx === "high"}>
+        <Sparkles className="size-5" />
       </Btn>
       <Btn label="How the cold works" onClick={() => setPanel("help")}>
         <Snowflake className="size-5" />
@@ -750,7 +756,7 @@ function HelpBook() {
         <p>Pressure is how hot. Radius is how far, and it multiplies the Kiln’s thirst. Surge adds a band instantly and strains the vessel. The second time strain breaks the Kiln, the city ends.</p>
         <p>People in canvas are one band warmer than people left in the wind. Huts and longhouses are warmer still. Illness follows the band. An infirmary, staffed by specialists, pulls them back.</p>
         <p>Hands go first to the infirmary, then the survey, then the mess, then the yards. Build only what you can staff. Eat at dawn: one meal each. The Hush is days 6 and 7. Win by reaching dawn of day 8.</p>
-        <p>Peat seams are the dark tiles. Lichen is dull green. Scrap is pale rust. Groves are the paler snow. The eye button paints every tile by warmth.</p>
+        <p>Peat seams show dark cut trenches. Groves have pines. Scrap is a rusty heap. Lichen is green moss. The amber outline is how far the Kiln’s warmth reaches, and the eye button paints every tile by warmth. The sparkle button (G) switches between full and light graphics.</p>
       </div>
     </Sheet>
   );
