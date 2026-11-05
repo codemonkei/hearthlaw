@@ -24,6 +24,10 @@ import type { BuildingKind, Deposit, SimState, Terrain } from "@/game/sim/types"
 const GROUND_Y = -0.02;
 /** Half the old slab thickness: structures are authored relative to the slab centre. */
 const SLAB_HALF = 0.1;
+/** Tile top above the slab centre, in structure-local units. */
+const TILE_TOP_LOCAL = 0.1;
+/** The Kiln is drawn smaller than authored so its plinth (radius ~1.6) fits inside its own hex (~0.96). */
+const KILN_SCALE = 0.6;
 /** How far each tile column reaches below the ground plane. */
 const COLUMN_SINK = 0.3;
 import { useGame } from "@/game/store";
@@ -480,9 +484,10 @@ function City() {
   const band = outdoorBand(temp);
   const hoverInfo: { label: Label | null } = { label: null };
   const smoke: SmokeEmitter[] = [];
-  const kilnTop = hexToWorld(0, 0, sim.terrain)[1] - SLAB_HALF;
+  // The Kiln is drawn at KILN_SCALE about its slab centre, lifted so its plinth still stands on the tile top.
+  const kilnTop = hexToWorld(0, 0, sim.terrain)[1] - SLAB_HALF + TILE_TOP_LOCAL * (1 - KILN_SCALE);
   const kilnLevel = sim.kiln.running ? sim.kiln.pressure + (sim.kiln.surge ? 1 : 0) : 0;
-  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + kilnStackTop(kilnFeatures) + 0.05, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
+  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + (kilnStackTop(kilnFeatures) + 0.05) * KILN_SCALE, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
 
   return (
     <group>
@@ -572,7 +577,7 @@ function City() {
       <HeatRing sim={sim} />
       <Smoke emitters={smoke} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
-      <group position={[0, kilnTop, 0]}>
+      <group position={[0, kilnTop, 0]} scale={KILN_SCALE}>
         <Kiln
           strain={sim.kiln.strain}
           pressure={sim.kiln.pressure}
