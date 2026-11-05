@@ -5,6 +5,7 @@ import { hasSave } from "@/game/sim/save";
 import { unlockAudio } from "@/game/audio";
 import { useGame } from "@/game/store";
 import { PlayChrome } from "@/game/ui/chrome";
+import { KilnLab } from "@/game/ui/KilnLab";
 import { Flame, ScrollText, Landmark } from "lucide-react";
 
 export function GameApp() {
@@ -60,6 +61,7 @@ export function GameApp() {
         <>
           <CityCanvas />
           <PlayChrome />
+          {import.meta.env.DEV && <KilnLab />}
         </>
       ) : (
         <Title

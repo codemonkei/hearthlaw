@@ -37,7 +37,8 @@ import {
   type SmokeEmitter,
 } from "@/game/scene/Atmosphere";
 import { Nature } from "@/game/scene/Nature";
-import { KILN_STACK_TOP, Kiln } from "@/game/scene/Kiln";
+import { Kiln, kilnStackTop } from "@/game/scene/Kiln";
+import { useKilnLab } from "@/game/scene/kilnLab";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -472,6 +473,7 @@ function City() {
   const select = useGame((s) => s.select);
   const sim = useGame.getState().sim;
   const pendingTile = useGame((s) => s.pendingTile);
+  const kilnFeatures = useKilnLab((s) => s.features);
   const [hoverKey, setHover] = useState<string | null>(null);
   // Touch has no hover: the tile waiting for confirmation stands in for it.
   const hover = hoverKey ?? (pendingTile ? `${pendingTile.q}:${pendingTile.r}` : null);
@@ -486,7 +488,7 @@ function City() {
   const smoke: SmokeEmitter[] = [];
   const kilnTop = hexToWorld(0, 0, sim.terrain)[1] - SLAB_HALF;
   const kilnLevel = sim.kiln.running ? sim.kiln.pressure + (sim.kiln.surge ? 1 : 0) : 0;
-  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + KILN_STACK_TOP + 0.05, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
+  if (kilnLevel > 0) smoke.push({ pos: [0, kilnTop + kilnStackTop(kilnFeatures) + 0.05, 0], strength: Math.min(1, 0.35 + kilnLevel * 0.18) });
 
   return (
     <group>
