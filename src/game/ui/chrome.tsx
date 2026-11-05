@@ -758,7 +758,7 @@ function Sheet({
   return (
     <section
       ref={ref}
-      className={`pointer-events-auto absolute inset-x-2 top-2 bottom-24 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto ${wide ? "md:w-[44rem] md:max-w-[calc(100%-4.5rem)]" : "md:w-96"}`}
+      className={`pointer-events-auto absolute inset-x-2 top-2 bottom-2 z-20 overflow-y-auto hl-panel p-4 md:inset-y-2 md:right-16 md:left-auto ${wide ? "md:w-[44rem] md:max-w-[calc(100%-4.5rem)]" : "md:w-96"}`}
       style={{ top }}
     >
       <div className="mb-3 flex items-start justify-between gap-3">
