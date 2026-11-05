@@ -129,7 +129,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: "wood",
     name: "Woodcutters' Lodge",
     blurb: "Timber for roofs and sledges. Best on a standing grove.",
-    cost: { timber: 30, iron: 0 },
+    cost: { timber: 20, iron: 0 },
     staff: 10,
     staffClass: "labourers",
     housing: 0,
@@ -231,7 +231,7 @@ export interface ExtractionDef {
 }
 
 export const EXTRACTION: Partial<Record<BuildingKind, ExtractionDef>> = {
-  peat: { deposit: "peat", resource: "fuel", on: 10, off: 2, yieldOn: "+10 fuel/h" },
+  peat: { deposit: "peat", resource: "fuel", on: 8, off: 2, yieldOn: "+8 fuel/h" },
   wood: { deposit: "timber", resource: "timber", on: 8, off: 2, yieldOn: "+8 timber/h" },
   trappers: { deposit: "lichen", resource: "raw", on: 4, off: 1, yieldOn: "+4 raw/h" },
   salvage: { deposit: "scrap", resource: "iron", on: 2, off: 0, yieldOn: "+2 iron, +3 timber, +3 fuel/h" },
@@ -482,10 +482,15 @@ export function formatClock(minute: number): string {
   return `Day ${c.day} · ${hh}:${mm}`;
 }
 
+/** Hush nights fall further than ordinary ones. */
+export function nightDrop(index0: number): number {
+  return index0 === 5 || index0 === 6 ? -15 : -10;
+}
+
 export function outdoorTemp(minute: number): number {
   const c = clockOf(minute);
   const night = c.hour >= 20 || c.hour < 6;
-  return dayBaseTemp(dayIndex(minute)) + (night ? -10 : 0);
+  return dayBaseTemp(dayIndex(minute)) + (night ? nightDrop(dayIndex(minute)) : 0);
 }
 
 export function outdoorBand(tempC: number): number {

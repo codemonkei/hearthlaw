@@ -194,17 +194,19 @@ export const useGame = create<GameStore>((set, get) => {
       if (typeof document !== "undefined" && document.hidden) return;
       acc += Math.min(dt, 0.1) * sim.speed * 10;
       let steps = 0;
-      let dirty = false;
+      const start = sim.minute;
       while (acc >= 1 && steps < 40) {
         acc -= 1;
         steps += 1;
         stepMinute(sim);
-        dirty = true;
         if (sim.pendingEvent || sim.outcome) break;
       }
-      if (!dirty) return;
-      if (sim.minute % 10 === 0 || sim.pendingEvent || sim.outcome) {
-        if (sim.minute % 60 === 0 || sim.outcome) saveSim(sim);
+      if (sim.minute === start) return;
+      // A frame can advance several minutes, so act on the boundaries it crossed rather than
+      // on landing exactly on them (which fast speeds and slow frames can skip forever).
+      const crossed = (every: number) => Math.floor(sim.minute / every) !== Math.floor(start / every);
+      if (crossed(10) || sim.pendingEvent || sim.outcome) {
+        if (crossed(60) || sim.pendingEvent || sim.outcome) saveSim(sim);
         touchAudio(sim);
         set({ rev: get().rev + 1 });
       }

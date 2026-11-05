@@ -94,6 +94,8 @@ export interface PromiseMark {
   due: number;
   grievanceAt: number;
   text: string;
+  /** A promise to inscribe a clause is kept by inscribing it, not by the city's mood. */
+  clause?: ClauseId;
 }
 
 export type DealKind = "tribute-fuel" | "tribute-meals" | "promise";

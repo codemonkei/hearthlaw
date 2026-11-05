@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/game/sim/smoke.ts",
+    "playtest": "tsx src/game/sim/playtest.ts",
     "models:nature": "node scripts/build-nature-models.mjs"
   },
   "dependencies": {

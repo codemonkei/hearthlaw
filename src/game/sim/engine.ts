@@ -66,9 +66,12 @@ export function markChronicle(sim: SimState, axis: ChronicleAxis, delta: number,
   if (sim.chronicle.marks.length > 24) sim.chronicle.marks.length = 24;
 }
 
+/** Fuel per hour for each pressure step, per ring of radius (plus the Kiln's own). High pressure drinks deep. */
+const PRESSURE_DRAW = [0, 1, 2, 3, 5];
+
 export function kilnBurn(pressure: number, radius: number): number {
   if (pressure <= 0) return 0;
-  return 2 * pressure * (radius + 1);
+  return 2 * (PRESSURE_DRAW[Math.min(4, pressure)] ?? 5) * (radius + 1);
 }
 
 export function heatLevel(sim: SimState): number {
@@ -245,7 +248,7 @@ export function createGame(seed: number): SimState {
     rng: seedRng(seed),
     minute: 6 * 60,
     speed: 1,
-    resources: { fuel: 460, timber: 240, iron: 46, raw: 70, meals: 320 },
+    resources: { fuel: 460, timber: 260, iron: 46, raw: 70, meals: 320 },
     pop: {
       healthy: { labourers: 46, specialists: 16, dependents: 18 },
       ill: emptyCohort(),
@@ -463,6 +466,7 @@ export function placeBuilding(
 }
 
 export function upgradeBuilding(sim: SimState, id: number): { ok: boolean; reason?: string } {
+  if (sim.outcome) return { ok: false, reason: "The watch is over." };
   const b = sim.buildings.find((x) => x.id === id);
   if (!b) return { ok: false, reason: "Missing." };
   const next: Partial<Record<BuildingKind, BuildingKind>> = { tent: "hut", hut: "longhouse" };
@@ -479,6 +483,7 @@ export function upgradeBuilding(sim: SimState, id: number): { ok: boolean; reaso
 }
 
 export function demolishBuilding(sim: SimState, id: number): { ok: boolean; reason?: string } {
+  if (sim.outcome) return { ok: false, reason: "The watch is over." };
   const idx = sim.buildings.findIndex((b) => b.id === id);
   if (idx < 0) return { ok: false, reason: "Missing." };
   const b = sim.buildings[idx]!;
@@ -646,14 +651,13 @@ export function callVote(
 ): { ok: boolean; reason?: string; passed?: boolean } {
   const gate = clauseGate(sim, id);
   if (gate) return { ok: false, reason: gate };
-  for (const circle of CIRCLE_IDS) {
-    const deal = deals[circle];
-    if (deal === "tribute-fuel" && sim.resources.fuel < 40) {
-      return { ok: false, reason: "Not enough fuel for that tribute." };
-    }
-    if (deal === "tribute-meals" && sim.resources.meals < 30) {
-      return { ok: false, reason: "Not enough meals for that tribute." };
-    }
+  const fuelTributes = CIRCLE_IDS.filter((c) => deals[c] === "tribute-fuel").length;
+  const mealTributes = CIRCLE_IDS.filter((c) => deals[c] === "tribute-meals").length;
+  if (sim.resources.fuel < 40 * fuelTributes) {
+    return { ok: false, reason: fuelTributes > 1 ? `Those tributes take ${40 * fuelTributes} fuel.` : "Not enough fuel for that tribute." };
+  }
+  if (sim.resources.meals < 30 * mealTributes) {
+    return { ok: false, reason: mealTributes > 1 ? `Those tributes take ${30 * mealTributes} meals.` : "Not enough meals for that tribute." };
   }
   for (const circle of CIRCLE_IDS) {
     const deal = deals[circle];
@@ -718,14 +722,34 @@ function weightedBands(sim: SimState): { ill: number; worsen: number; die: numbe
   return { ill, worsen, die, warmSlots };
 }
 
+/** People sleeping at Bitter (-2) or colder: houses fill warmest first, the rest are on the street. */
+function coldOccupants(sim: SimState): number {
+  let left = livingCount(sim);
+  let cold = 0;
+  const houses = sim.buildings
+    .filter((b) => BUILDINGS[b.kind].housing > 0)
+    .map((b) => ({ slots: BUILDINGS[b.kind].housing, w: buildingWarmth(sim, b) }))
+    .sort((a, b) => b.w - a.w);
+  for (const h of houses) {
+    const n = Math.min(left, h.slots);
+    if (h.w <= -2) cold += n;
+    left -= n;
+  }
+  if (left > 0 && streetWarmth(sim) <= -2) cold += left;
+  return cold;
+}
+
 function bandRates(w: number): { ill: number; worsen: number; die: number } {
-  if (w <= -4) return { ill: 0.09, worsen: 0.06, die: 0.035 };
-  if (w <= -3) return { ill: 0.045, worsen: 0.025, die: 0.01 };
-  if (w <= -2) return { ill: 0.02, worsen: 0.01, die: 0.003 };
-  if (w <= -1) return { ill: 0.008, worsen: 0.003, die: 0 };
+  if (w <= -4) return { ill: 0.1, worsen: 0.07, die: 0.05 };
+  if (w <= -3) return { ill: 0.06, worsen: 0.035, die: 0.02 };
+  if (w <= -2) return { ill: 0.03, worsen: 0.015, die: 0.006 };
+  if (w <= -1) return { ill: 0.012, worsen: 0.004, die: 0 };
   if (w <= 0) return { ill: 0.0025, worsen: 0.0008, die: 0 };
   return { ill: 0, worsen: 0, die: 0 };
 }
+
+/** Chance per hour that one medic on shift cures someone. */
+const MEDIC_CURE_RATE = 0.3;
 
 function applyHealth(sim: SimState, medics: number): number {
   const rates = weightedBands(sim);
@@ -749,10 +773,11 @@ function applyHealth(sim: SimState, medics: number): number {
   }
   const warmShare = rates.warmSlots / Math.max(1, livingCount(sim));
   for (const cls of CLASSES) {
-    const natural = rollCount(sim.pop.ill[cls], 0.05 * Math.min(1, warmShare * 1.4), draw);
+    const natural = rollCount(sim.pop.ill[cls], 0.03 * Math.min(1, warmShare * 1.4), draw);
     shiftCohort(sim.pop.ill, sim.pop.healthy, cls, natural);
   }
-  let cures = medics * (hasClause(sim, "every-life") ? 2 : 1) * (hasClause(sim, "triage") ? 2 : 1);
+  // Each medic on shift pulls someone back about one hour in three.
+  let cures = rollCount(medics, MEDIC_CURE_RATE, draw) * (hasClause(sim, "every-life") ? 2 : 1) * (hasClause(sim, "triage") ? 2 : 1);
   const cureOrder: ClassName[] = ["labourers", "specialists", "dependents"];
   for (const cls of cureOrder) {
     if (cures <= 0) break;
@@ -936,7 +961,8 @@ function checkPromises(sim: SimState): void {
       keep.push(p);
       continue;
     }
-    if (sim.morale.grievance <= p.grievanceAt + 40) {
+    const kept = p.clause ? hasClause(sim, p.clause) : sim.morale.grievance <= p.grievanceAt + 40;
+    if (kept) {
       sim.circles[p.circle].trust = clamp(sim.circles[p.circle].trust + 6, 0, 100);
       pushLog(sim, `Promise kept with the ${p.circle}.`);
     } else {
@@ -955,9 +981,9 @@ function payHeat(sim: SimState): void {
     sim.resources.fuel -= burn;
     sim.kiln.running = true;
   } else if (sim.kiln.pressure > 0) {
+    if (sim.kiln.running) pushLog(sim, "The Kiln starves and goes dark.");
     sim.kiln.running = false;
     sim.kiln.surge = false;
-    pushLog(sim, "The Kiln starves and goes dark.");
   } else {
     sim.kiln.running = false;
   }
@@ -997,18 +1023,23 @@ function payHeat(sim: SimState): void {
 
 function maybeEvents(sim: SimState): void {
   if (sim.pendingEvent || sim.outcome) return;
-  const c = clockHour(sim.minute);
-  const flag = (id: string, when: boolean) => {
-    if (!when || sim.eventFlags[id]) return;
+  // Each scripted event fires at its hour, or as soon after as the clock is free, so a crisis
+  // or an ultimatum landing on the same hour delays it instead of erasing it.
+  const at = (day: number, hour: number) => (day - 1) * DAY_MINUTES + hour * 60;
+  const schedule: [string, number][] = [
+    ["shaft-boy", at(2, 9)],
+    ["strangers", at(3, 11)],
+    ["bread", at(4, 8)],
+    ["burial", at(4, 18)],
+    ["hush-warn", at(5, 16)],
+    ["hush", at(6, 0)],
+  ];
+  for (const [id, due] of schedule) {
+    if (sim.pendingEvent) return;
+    if (sim.minute < due || sim.eventFlags[id]) continue;
     sim.eventFlags[id] = true;
     sim.pendingEvent = id;
-  };
-  flag("shaft-boy", c.day === 2 && c.hour === 9);
-  flag("strangers", c.day === 3 && c.hour === 11);
-  flag("bread", c.day === 4 && c.hour === 8);
-  flag("burial", c.day === 4 && c.hour === 18 && sim.pendingEvent == null);
-  flag("hush-warn", c.day === 5 && c.hour === 16);
-  flag("hush", dayIndex(sim.minute) === 5 && c.hour === 0);
+  }
 }
 
 function clockHour(minute: number): { day: number; hour: number } {
@@ -1023,11 +1054,7 @@ function runHour(sim: SimState): void {
   const infirmary = sim.buildings.find((b) => b.kind === "infirmary");
   const medics = infirmary ? (staffOf(eco, infirmary.id)?.assigned ?? 0) : 0;
   const deaths = applyHealth(sim, medics);
-  const cold = streetWarmth(sim) <= -2 ? eco.unsheltered : 0;
-  const housedCold = sim.buildings
-    .filter((b) => BUILDINGS[b.kind].housing > 0 && buildingWarmth(sim, b) <= -2)
-    .reduce((n, b) => n + BUILDINGS[b.kind].housing, 0);
-  applyMorale(sim, deaths, cold + Math.min(eco.sheltered, housedCold));
+  applyMorale(sim, deaths, coldOccupants(sim));
   if (deaths > 0) pushLog(sim, `${deaths} die of the cold.`);
   checkPromises(sim);
   checkReckoning(sim);
@@ -1041,6 +1068,12 @@ export function stepMinute(sim: SimState): void {
   if (sim.outcome || sim.pendingEvent) return;
   sim.minute += 1;
   if (sim.minute >= VICTORY_MINUTE && !sim.outcome) {
+    if (sim.morale.reckoningUntil != null) {
+      // The city outlived the Hush, but not its patience with you.
+      sim.outcome = "exile";
+      pushLog(sim, "Dawn of the eighth day. The ultimatum still stands, and they walk you to the ice.");
+      return;
+    }
     sim.outcome = "endured";
     pushLog(sim, "Dawn of the eighth day. The Hush is behind you.");
     sim.pendingEvent = "victory";
@@ -1140,6 +1173,7 @@ export function resolveEvent(sim: SimState, choice: string): void {
         due: sim.minute + 2 * DAY_MINUTES,
         grievanceAt: sim.morale.grievance - 80,
         text: "Promised Elder Ruut a burial ground.",
+        clause: "ash-field",
       });
       sim.circles.hearthkin.trust = clamp(sim.circles.hearthkin.trust + 4, 0, 100);
       pushLog(sim, "You promise Elder Ruut an Ash Field within two days.");
