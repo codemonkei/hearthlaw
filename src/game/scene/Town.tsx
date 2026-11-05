@@ -58,6 +58,7 @@ function snowRoof(len: number, y = 1): PartSpec[] {
   const half = (len - 1) / 2;
   return [
     ["holiday/cabin-roof-point", 0, y, 0, 0, [1, 1, (len + 0.4) / 1.4]],
+    ["holiday/cabin-roof-top", 0, y + 1.26, 0, 0, [1, 1, len + 0.4]],
     ["holiday/cabin-wall-roof-center", 0, y, half, 0],
     ["holiday/cabin-wall-roof-center", 0, y, -half, 180],
   ];
@@ -357,43 +358,25 @@ function Windows({ windows }: { windows: TownLayout["windows"] }) {
 }
 
 /**
- * Snow on every upward-facing surface, in patches. `SNOW_COVER` (0..1) is driven by the storm:
- * a light dusting in calm weather, nearly white roofs at the height of a blizzard.
+ * Snow on upward-facing surfaces, a whole face at a time. `SNOW_COVER` (0..1) follows the storm:
+ * in calm weather only flat tops and ridges are white; a blizzard buries the roof slopes too.
  */
 function addSnowCover(m: THREE.MeshStandardMaterial) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSnowCover = SNOW_COVER;
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vSnowWorld;")
-      .replace(
-        "#include <worldpos_vertex>",
-        `#include <worldpos_vertex>
-        vec4 snowWorld = vec4(transformed, 1.0);
-        #ifdef USE_INSTANCING
-          snowWorld = instanceMatrix * snowWorld;
-        #endif
-        vSnowWorld = (modelMatrix * snowWorld).xyz;`,
-      );
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uSnowCover;\nvarying vec3 vSnowWorld;")
+      .replace("#include <common>", "#include <common>\nuniform float uSnowCover;")
       .replace(
         "#include <normal_fragment_maps>",
         `#include <normal_fragment_maps>
         {
           float up = inverseTransformDirection(normal, viewMatrix).y;
-          float facing = smoothstep(0.45, 0.75, up);
-          // Soft drifts: smooth value noise in world space, so snow settles unevenly.
-          vec2 sp = vSnowWorld.xz * 5.0 + vSnowWorld.y * 1.7;
-          vec2 i0 = floor(sp);
-          vec2 f = fract(sp);
-          f = f * f * (3.0 - 2.0 * f);
-          float a = fract(sin(dot(i0, vec2(12.9898, 78.233))) * 43758.5453);
-          float b = fract(sin(dot(i0 + vec2(1.0, 0.0), vec2(12.9898, 78.233))) * 43758.5453);
-          float c = fract(sin(dot(i0 + vec2(0.0, 1.0), vec2(12.9898, 78.233))) * 43758.5453);
-          float d = fract(sin(dot(i0 + vec2(1.0, 1.0), vec2(12.9898, 78.233))) * 43758.5453);
-          float n = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-          float settled = smoothstep(n - 0.12, n + 0.12, uSnowCover);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.9, 0.95), facing * settled);
+          // Whole faces, no noise: flat tops always hold snow; roof slopes stay bare timber
+          // in calm weather and whiten face by face as the storm builds.
+          float flatTop = smoothstep(0.93, 0.97, up);
+          float slope = smoothstep(0.55, 0.7, up) * (1.0 - flatTop);
+          float cover = flatTop * mix(0.8, 1.0, uSnowCover) + slope * smoothstep(0.35, 0.95, uSnowCover);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.9, 0.95), cover);
         }`,
       );
   };
