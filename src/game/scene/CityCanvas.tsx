@@ -62,6 +62,7 @@ import { DepositTile } from "@/game/scene/Deposits";
 import { useKilnLab } from "@/game/scene/kilnLab";
 import { makeHeightAt } from "@/game/scene/terrain";
 import { Walkers } from "@/game/scene/Walkers";
+import { Spindrift } from "@/game/scene/Spindrift";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -763,6 +764,7 @@ function City() {
       <HeatRing sim={sim} />
       <Smoke emitters={smoke} />
       <Walkers sim={sim} />
+      <Spindrift sim={sim} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <group position={[0, kilnTop, 0]} scale={[KILN_SCALE, KILN_HEIGHT, KILN_SCALE]}>
         <Kiln

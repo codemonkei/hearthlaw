@@ -5,6 +5,7 @@ import { hasSave } from "@/game/sim/save";
 import { unlockAudio } from "@/game/audio";
 import { useGame } from "@/game/store";
 import { PlayChrome } from "@/game/ui/chrome";
+import { StormFrost } from "@/game/ui/StormFrost";
 import { KilnLab } from "@/game/ui/KilnLab";
 import { buildShowcase, isShowcase } from "@/game/showcase";
 import { Flame, ScrollText, Landmark } from "lucide-react";
@@ -77,6 +78,7 @@ export function GameApp() {
       {phase === "play" ? (
         <>
           <CityCanvas />
+          <StormFrost />
           <PlayChrome />
           <KilnLab />
         </>

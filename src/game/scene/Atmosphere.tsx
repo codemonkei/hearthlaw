@@ -5,6 +5,8 @@ import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 import { FX_SETTINGS, type FxQuality } from "@/game/fx";
+import { syncWeather } from "@/game/audio";
+import { useGame } from "@/game/store";
 
 /*
  * Mood: low winter sun by day, moonlight by night, warm firelight from the Kiln and
@@ -23,7 +25,18 @@ export const weather = {
   twilight: 0,
   /** 0 calm … 1 whiteout. Follows the outdoor temperature. */
   storm: 0,
+  /** 0 … 1: the wind's gusts on top of the storm. Only blows when there is a storm to gust. */
+  gust: 0,
 };
+
+/**
+ * Gust shape over time: mostly lulls, with sharp peaks every several seconds. Three slow
+ * sines that rarely line up, clipped and sharpened.
+ */
+function gustAt(t: number): number {
+  const raw = Math.sin(t * 0.37) + Math.sin(t * 0.91 + 1.3) * 0.6 + Math.sin(t * 0.13 + 2) * 0.8;
+  return Math.max(0, raw / 2.4) ** 1.6;
+}
 
 /** Three window states shared by every building, so night can brighten them all at once. */
 export const WINDOW_MATERIALS = {
@@ -139,7 +152,8 @@ export function SceneLighting({
   const fog = useMemo(() => new THREE.FogExp2(PAL.skyNight.getHex(), 0.022), []);
   const first = useRef(true);
 
-  useFrame(({ scene }, delta) => {
+  const soundAt = useRef(0);
+  useFrame(({ scene, clock: frameClock }, delta) => {
     const now = clock();
     if (!now) return;
     const dt = first.current ? 100 : Math.min(delta, 0.1);
@@ -151,7 +165,17 @@ export function SceneLighting({
     weather.twilight = THREE.MathUtils.damp(weather.twilight, twilight, 2, dt);
     // The wind takes its time to rise and to fall.
     weather.storm = THREE.MathUtils.damp(weather.storm, stormFor(now.tempC), 0.35, dt);
-    const { daylight: D, twilight: T, storm: S } = weather;
+    // Gusts ride on the storm: fast to rise, slower to fall.
+    const gustTarget = weather.storm * gustAt(frameClock.elapsedTime);
+    weather.gust = THREE.MathUtils.damp(weather.gust, gustTarget, gustTarget > weather.gust ? 3 : 1.2, dt);
+    const { daylight: D, twilight: T, storm: S, gust: G } = weather;
+
+    // The wind's voice follows the weather a few times a second.
+    soundAt.current -= Math.min(delta, 0.1);
+    if (soundAt.current <= 0) {
+      soundAt.current = 0.2;
+      syncWeather(S, G, Boolean(useGame.getState().sim?.muted));
+    }
 
     // Sun across the short day, moon across the long night.
     const dayT = THREE.MathUtils.clamp((now.hour - SUNRISE) / (SUNSET - SUNRISE), 0, 1);
@@ -183,7 +207,8 @@ export function SceneLighting({
     background.lerp(_c2, S * 0.85);
     scene.background = background;
     fog.color.copy(background);
-    fog.density = 0.02 + S * 0.022;
+    // Each gust closes the whiteout in a little further.
+    fog.density = 0.02 + S * 0.022 + G * 0.016;
     scene.fog = fog;
     scene.environmentIntensity = (0.45 + D * 0.75) * (1 - 0.35 * S);
 
@@ -306,7 +331,7 @@ export function Snowfall() {
     mat.opacity = 0.8 + S * 0.15;
     mat.color.copy(flakeNight).lerp(flakeDay, weather.daylight);
     const fall = 1 + S * 1.6;
-    const wind = 0.9 + S * 11;
+    const wind = 0.9 + S * 11 + weather.gust * 9;
     const attr = geo.getAttribute("position") as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
       let y = attr.getY(i) - d * (1.1 + (i % 7) * 0.18) * fall;
@@ -359,14 +384,14 @@ export function GroundMist() {
   useFrame((_, delta) => {
     const g = group.current;
     if (!g) return;
-    drift.current += Math.min(delta, 0.1) * (1 + weather.storm * 6);
+    drift.current += Math.min(delta, 0.1) * (1 + weather.storm * 6 + weather.gust * 8);
     const t = drift.current;
     g.children.forEach((child, i) => {
       const b = banks[i]!;
       const a = b.a + t * b.speed;
       child.position.set(Math.cos(a) * b.r, b.y + weather.storm * 0.6, Math.sin(a) * b.r);
       const m = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
-      m.opacity = 0.16 + weather.storm * 0.3;
+      m.opacity = 0.16 + weather.storm * 0.3 + weather.gust * 0.15;
     });
   });
   return (

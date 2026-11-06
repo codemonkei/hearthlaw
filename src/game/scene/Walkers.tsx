@@ -583,6 +583,8 @@ export function Walkers({ sim }: { sim: SimState }) {
     const night = hour < WAKE;
     const bedtime = hour >= BEDTIME;
     const storm = weather.storm;
+    // In a bad storm most folk stay in: only this many adults keep going about.
+    const outdoors = Math.ceil(count * (1 - 0.7 * THREE.MathUtils.smoothstep(storm, 0.35, 0.9)));
 
     const drop = (x: number, z: number, heading: number, side: number, size: number) => {
       const i = nextPrint.current;
@@ -661,7 +663,7 @@ export function Walkers({ sim }: { sim: SimState }) {
         w.asleep = true;
         w.homeward = false;
         w.path = [];
-      } else if (w.asleep && minuteOfDay >= WAKE * 60 + w.wakeDelay) {
+      } else if (w.asleep && i < outdoors && minuteOfDay >= WAKE * 60 + w.wakeDelay && !bedtime) {
         // Step out of a house door, facing out into the street.
         const home = homes[Math.floor(Math.random() * homes.length)] ?? spots[0];
         const ang = Math.random() * Math.PI * 2;
@@ -673,7 +675,8 @@ export function Walkers({ sim }: { sim: SimState }) {
         w.load = null;
         w.wait = Math.random() * 2;
       }
-      if (!child && bedtime && !w.homeward && !w.asleep) {
+      // Bedtime, or the storm drives them in.
+      if (!child && (bedtime || i >= outdoors) && !w.homeward && !w.asleep) {
         w.homeward = true;
         w.path = [];
         w.wait = Math.min(w.wait, Math.random() * 2);
@@ -765,7 +768,8 @@ export function Walkers({ sim }: { sim: SimState }) {
       }) as Parts;
 
       // Lights only once the sky has darkened enough for this one to want one.
-      const dark = !child && weather.daylight < w.lightAt;
+      // The storm's gloom brings the lights out early.
+      const dark = !child && weather.daylight * (1 - 0.6 * storm) < w.lightAt;
       const shoulderLoad = w.load === "logs" || w.load === "peat" || w.load === "crate";
       for (const l of LOADS) {
         const o = parts[l];
