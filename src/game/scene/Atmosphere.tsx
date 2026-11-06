@@ -348,22 +348,32 @@ export function Snowfall() {
   return <points ref={ref} geometry={geo} material={mat} frustumCulled={false} />;
 }
 
-let softTexture: THREE.CanvasTexture | null = null;
+let softTexture: THREE.DataTexture | null = null;
 
-/** A round, soft-edged puff shared by mist planes. */
-function getSoftTexture(): THREE.CanvasTexture {
+/**
+ * A round, soft-edged puff shared by mist planes and falling snow. Computed pixel by pixel
+ * rather than drawn on a canvas: Safari's fingerprinting protection sprinkles random colour
+ * noise into canvas pixels handed to WebGL, which showed as rainbow speckles in the mist.
+ */
+function getSoftTexture(): THREE.DataTexture {
   if (softTexture) return softTexture;
   const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.45)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  softTexture = new THREE.CanvasTexture(canvas);
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) / (size / 2);
+      // The same falloff as before: 1 at the centre, 0.45 at 45 %, 0 at the rim.
+      const a = d < 0.45 ? 1 - (d / 0.45) * 0.55 : Math.max(0, 0.45 * (1 - (d - 0.45) / 0.55));
+      const i = (y * size + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  softTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  softTexture.magFilter = THREE.LinearFilter;
+  softTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  softTexture.generateMipmaps = true;
+  softTexture.needsUpdate = true;
   return softTexture;
 }
 
