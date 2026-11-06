@@ -37,7 +37,8 @@ export function Heater({
   if (state === "none") return null;
   const lit = state === "lit";
   return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={HEATER_SCALE}>
+    // Named so storm snow leaves the stove, and the ground around it, clear.
+    <group name="heater" position={position} rotation={[0, rotationY, 0]} scale={HEATER_SCALE}>
       {/* Stove box on short legs. */}
       <mesh position={[0, 0.12, 0]} castShadow>
         <boxGeometry args={[0.15, 0.17, 0.11]} />

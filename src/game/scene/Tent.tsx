@@ -195,7 +195,7 @@ export function CanvasTent({ warmth, selected }: { warmth: number; selected: boo
       <mesh geometry={gable} position={[0, 0, L / 2]} castShadow>
         <meshStandardMaterial color={CANVAS_SHADE} roughness={0.95} side={THREE.DoubleSide} {...FLAT} />
       </mesh>
-      <mesh geometry={doorway} position={[0, 0, L / 2 + 0.004]} material={doorGlow} />
+      <mesh name="door" geometry={doorway} position={[0, 0, L / 2 + 0.004]} material={doorGlow} />
       {[-1, 1].map((side) => (
         <mesh key={`flap-${side}`} geometry={flap} position={[side * 0.17, 0, L / 2 + 0.01]} rotation={[0, side === 1 ? -0.5 : Math.PI + 0.5, 0]}>
           <meshStandardMaterial color={canvasColor} roughness={0.92} side={THREE.DoubleSide} {...FLAT} />

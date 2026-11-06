@@ -79,7 +79,7 @@ export function Depot({ selected, heater = "none" }: { selected: boolean; heater
       <GableRoof hw={HW} hl={HL} wallTop={WALL_TOP} ridge={RIDGE} eave={0.12} over={0.14} phase={3.7} gableColor={BOARDS} />
 
       {/* Wide braced double doors. */}
-      <group position={[-0.04, FOOT, HL + 0.016]}>
+      <group name="door" position={[-0.04, FOOT, HL + 0.016]}>
         <mesh position={[0, 0.17, -0.004]}>
           <boxGeometry args={[0.42, 0.36, 0.02]} />
           <meshStandardMaterial color={C.logDark} roughness={1} {...FLAT} />

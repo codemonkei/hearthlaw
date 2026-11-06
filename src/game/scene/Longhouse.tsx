@@ -193,7 +193,7 @@ export function Longhouse({ warmth, selected, heater = "none" }: { warmth: numbe
       </group>
 
       {/* Porch over the double doors: two posts, a small roof, a step. */}
-      <group position={[0, FOOT, HL + LOG_R]}>
+      <group name="door" position={[0, FOOT, HL + LOG_R]}>
         {[-1, 1].map((s) => (
           <mesh key={`door-${s}`} position={[s * 0.065, 0.2, 0.012]}>
             <boxGeometry args={[0.12, 0.38, 0.015]} />

@@ -215,7 +215,8 @@ export function LogWalls({
 /** A plank door with a frame and a latch, standing on `y` against a wall facing +z. */
 export function Door({ position, width = 0.22, height = 0.38 }: { position: [number, number, number]; width?: number; height?: number }) {
   return (
-    <group position={position}>
+    // Named so storm snow knows to keep the doorstep clear.
+    <group name="door" position={position}>
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[width + 0.05, height + 0.03, 0.02]} />
         <meshStandardMaterial color={C.plank} roughness={1} {...FLAT} />

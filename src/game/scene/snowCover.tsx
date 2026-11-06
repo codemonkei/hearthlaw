@@ -91,22 +91,56 @@ const DRIFTS: [number, number, number, number][] = [
   [0.42, 0.05, 0.42, 0.62],
   [-0.38, -0.25, 0.26, 0.32],
   [0.05, 0.42, 0.34, 0.2],
+  [-0.42, 0.18, 0.22, 0.3],
+  [0.22, -0.42, 0.32, 0.2],
 ];
 
+/** Patch every mesh under `root`, except a heater's: the stove stays hot and bare. */
+function patchTree(root: THREE.Object3D) {
+  if (root.name === "heater") return;
+  const mesh = root as THREE.Mesh;
+  if (mesh.isMesh) {
+    if (Array.isArray(mesh.material)) mesh.material.forEach(patch);
+    else if (mesh.material) patch(mesh.material);
+  }
+  for (const child of root.children) patchTree(child);
+}
+
+/** Ground kept clear: in front of each door (folk dig it out) and around a heater (it melts it). */
+type KeepOut = [x: number, z: number, radius: number];
+
+const _p = new THREE.Vector3();
+
 /**
- * Wrap a building: patches its materials for roof snow and banks drifts against it. Re-checks
- * after every render, since models add parts (heaters, upgrades) as the city changes.
+ * Wrap a building: patches its materials for roof snow and banks drifts against it, keeping the
+ * doorstep and the heater clear. Re-checks after every render, since models add parts (heaters,
+ * upgrades) as the city changes.
  */
 export function Snowy({ children }: { children: ReactNode }) {
+  const root = useRef<THREE.Group>(null);
   const group = useRef<THREE.Group>(null);
   const drifts = useRef<THREE.Group>(null);
+  const keepOut = useRef<KeepOut[]>([]);
   useLayoutEffect(() => {
-    group.current?.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (Array.isArray(mesh.material)) mesh.material.forEach(patch);
-      else if (mesh.material) patch(mesh.material);
+    const r = root.current;
+    const g = group.current;
+    if (!r || !g) return;
+    patchTree(g);
+    // Where the doors and the heater sit, in this building's own ground plan.
+    r.updateWorldMatrix(true, true);
+    const out: KeepOut[] = [];
+    g.traverse((o) => {
+      if (o.name !== "door" && o.name !== "heater") return;
+      r.worldToLocal(o.getWorldPosition(_p));
+      const d = Math.hypot(_p.x, _p.z) || 1;
+      if (o.name === "door") {
+        // The step in front of the door, a little out from the wall.
+        out.push([_p.x + (_p.x / d) * 0.18, _p.z + (_p.z / d) * 0.18, 0.34]);
+      } else {
+        out.push([_p.x, _p.z, 0.4]);
+      }
     });
+    keepOut.current = out;
   });
   useFrame(() => {
     const d = drifts.current;
@@ -114,12 +148,20 @@ export function Snowy({ children }: { children: ReactNode }) {
     const c = snowCover.value;
     d.visible = c > 0.02;
     d.children.forEach((child, i) => {
-      const grow = Math.min(1, Math.max(0, c * 1.4 - i * 0.15));
-      child.scale.set(DRIFTS[i][2] * (0.6 + grow * 0.4), 0.22 * grow + 0.001, DRIFTS[i][3] * (0.6 + grow * 0.4));
+      const [x, z, w, depth] = DRIFTS[i];
+      // Shrink a drift away to nothing where it would bury a doorstep or a heater.
+      let clear = 1;
+      for (const [kx, kz, kr] of keepOut.current) {
+        const dist = Math.hypot(x - kx, z - kz) - Math.max(w, depth) * 0.6;
+        clear = Math.min(clear, THREE.MathUtils.smoothstep(dist, kr * 0.4, kr));
+      }
+      const grow = Math.min(1, Math.max(0, c * 1.4 - i * 0.15)) * clear;
+      child.visible = grow > 0.01;
+      child.scale.set(w * (0.6 + grow * 0.4), 0.22 * grow + 0.001, depth * (0.6 + grow * 0.4));
     });
   });
   return (
-    <group>
+    <group ref={root}>
       <group ref={group}>{children}</group>
       <group ref={drifts} visible={false}>
         {DRIFTS.map(([x, z], i) => (

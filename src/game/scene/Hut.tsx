@@ -159,7 +159,7 @@ export function TimberHut({ warmth, selected, heater = "none" }: { warmth: numbe
       <RidgeSnow y={RIDGE + 0.04} length={roofLength} count={7} size={1.15} />
 
       {/* Plank door with a frame and an iron latch. */}
-      <group position={[0, FOOT, HL + LOG_R + 0.012]}>
+      <group name="door" position={[0, FOOT, HL + LOG_R + 0.012]}>
         <mesh position={[0, 0.19, 0]}>
           <boxGeometry args={[0.24, 0.4, 0.02]} />
           <meshStandardMaterial color={PLANK} roughness={1} {...FLAT} />
