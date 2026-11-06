@@ -480,6 +480,48 @@ const AXIAL_DIRS: [number, number][] = [
   [0, 1],
 ];
 
+/** True on wide screens, where the Kiln's card is always on show; follows resizes. */
+function useWide(): boolean {
+  const query = "(min-width: 1024px)";
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
+}
+
+/** One flat hex, shared by every tile's heat tint. */
+const tintHex = (() => {
+  const g = new THREE.CircleGeometry(HEX_SIZE * 0.97, 6);
+  g.rotateZ(Math.PI / 2);
+  g.rotateX(-Math.PI / 2);
+  return g;
+})();
+
+/**
+ * The heat overlay on one tile: a see-through wash of its warmth colour laid on the snow,
+ * in place of the old raised tile.
+ */
+function HeatTint({ color }: { color: string }) {
+  return (
+    <mesh geometry={tintHex} position={[0, TILE_TOP_LOCAL + 0.06, 0]} renderOrder={2} raycast={() => {}}>
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.42}
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 /** Glowing outline around every tile the Kiln (and its relay vents) can warm. Grey while banked. */
 function HeatRing({ sim }: { sim: SimState }) {
   const burning = heatLevel(sim) > 0;
@@ -683,6 +725,9 @@ function City() {
   const sim = useGame.getState().sim;
   const pendingTile = useGame((s) => s.pendingTile);
   const kilnFeatures = useKilnLab((s) => s.features);
+  const kilnOpen = useGame((s) => s.kilnOpen);
+  const setKilnOpen = useGame((s) => s.setKilnOpen);
+  const wide = useWide();
   const [hoverKey, setHover] = useState<string | null>(null);
   // Touch has no hover: the tile waiting for confirmation stands in for it.
   const hover = hoverKey ?? (pendingTile ? `${pendingTile.q}:${pendingTile.r}` : null);
@@ -693,7 +738,10 @@ function City() {
   void rev;
 
   // The full grid only for the heat overlay; in build mode just the tile under the pointer shows.
-  const grid = heat;
+  // The raised tiles never show now: the heat overlay washes colour over the snow instead.
+  const grid = false;
+  // Phones show the Kiln's warmth ring only while its controls are open (or the heat overlay is).
+  const showRing = wide || kilnOpen || heat;
   const temp = outdoorTemp(sim.minute);
   const band = outdoorBand(temp);
   const hoverInfo: { label: Label | null } = { label: null };
@@ -758,6 +806,8 @@ function City() {
                 e.stopPropagation();
                 if (isKiln) {
                   select(null);
+                  // On a phone, tapping the Kiln brings up its controls (and its ring).
+                  if (!wide && !buildKind) setKilnOpen(true);
                   return;
                 }
                 if (buildKind && !building) {
@@ -770,6 +820,7 @@ function City() {
               {/* Hidden (but still tappable) under the snowfield; the heat overlay shows them all. */}
               <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid} />
             </mesh>
+            {heat && <HeatTint color={isKiln ? "#f2a541" : color} />}
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
               <StandingBuilding
@@ -787,7 +838,7 @@ function City() {
           </group>
         );
       })}
-      <HeatRing sim={sim} />
+      {showRing && <HeatRing sim={sim} />}
       <Smoke emitters={smoke} />
       <Walkers sim={sim} />
       <Spindrift sim={sim} />

@@ -533,30 +533,15 @@ function DockButton({
   );
 }
 
-const KILN_OPEN_KEY = "hearthlaw.kilnRail";
-
 /** Phones and tablets: the Kiln's controls as a rail on the left, folded to one button when not in use. */
 function MobileKiln() {
   const sim = useGame.getState().sim!;
   const doPressure = useGame((s) => s.doPressure);
   const doRadius = useGame((s) => s.doRadius);
   const doSurge = useGame((s) => s.doSurge);
-  const [open, setOpen] = useState(() => {
-    try {
-      return window.localStorage.getItem(KILN_OPEN_KEY) !== "0";
-    } catch {
-      return true;
-    }
-  });
-  const toggle = () => {
-    const next = !open;
-    setOpen(next);
-    try {
-      window.localStorage.setItem(KILN_OPEN_KEY, next ? "1" : "0");
-    } catch {
-      /* the choice lasts this session */
-    }
-  };
+  const open = useGame((s) => s.kilnOpen);
+  const setKilnOpen = useGame((s) => s.setKilnOpen);
+  const toggle = () => setKilnOpen(!open);
   const cap = maxRadius(sim);
   const burn = kilnBurn(sim.kiln.pressure, sim.kiln.radius, difficultyOf(sim).burn);
   const lit = sim.kiln.running && sim.kiln.pressure > 0;

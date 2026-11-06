@@ -23,6 +23,7 @@ import type { BuildingKind, CircleId, ClauseId, DealKind, Difficulty, ResearchId
 const FX_KEY = "hearthlaw.fx";
 const DIFFICULTY_KEY = "hearthlaw.difficulty";
 const DOCK_KEY = "hearthlaw.dock";
+const KILN_OPEN_KEY = "hearthlaw.kilnRail";
 const TIPS_KEY = "hearthlaw.tips";
 const PLAYED_KEY = "hearthlaw.played";
 
@@ -80,6 +81,9 @@ interface GameStore {
   /** Phones: the build cards can be folded away. Desktop always shows them. */
   dockOpen: boolean;
   toggleDock: () => void;
+  /** Phones: the Kiln's controls are unfolded on the left rail (and its warmth ring shows). */
+  kilnOpen: boolean;
+  setKilnOpen: (open: boolean) => void;
   /** Guided tips: on for a first game, off by default after one has ended. */
   tips: boolean;
   setTips: (on: boolean) => void;
@@ -172,6 +176,7 @@ export const useGame = create<GameStore>((set, get) => {
     rev: 0,
     buildKind: null,
     dockOpen: read(DOCK_KEY) !== "0",
+    kilnOpen: read(KILN_OPEN_KEY) !== "0",
     tips: loadTips(),
     selectedId: null,
     panel: null,
@@ -350,6 +355,10 @@ export const useGame = create<GameStore>((set, get) => {
       sim.tipsSeen = [...(sim.tipsSeen ?? []), id];
       saveSim(sim);
       set({ rev: get().rev + 1 });
+    },
+    setKilnOpen: (kilnOpen) => {
+      store(KILN_OPEN_KEY, kilnOpen ? "1" : "0");
+      set({ kilnOpen, rev: get().rev + 1 });
     },
     toggleDock: () => {
       const dockOpen = !get().dockOpen;
