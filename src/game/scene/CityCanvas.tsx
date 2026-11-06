@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { FX_SETTINGS } from "@/game/fx";
@@ -219,6 +219,76 @@ function Structure({
   if (kind === "survey") return <SurveyHall warmth={warmth} selected={selected} heater={heater} />;
   if (kind === "depot") return <Depot selected={selected} heater={heater} />;
   return <RelayVent active={kilnRunning} selected={selected} />;
+}
+
+const BLUEPRINT = {
+  ok: { fill: "#6fb7ff", line: "#cfe8ff" },
+  poor: { fill: "#f2a541", line: "#ffe2b0" },
+} as const;
+
+/**
+ * The building a tap would place, drawn as a blueprint: the real model in see-through blue
+ * with its outlines traced, amber when the spot is poor. It only swaps materials on its own
+ * copy of the model, so the shared ones the city uses are never touched.
+ */
+function Blueprint({ kind, warmth, tone }: { kind: BuildingKind; warmth: number; tone: "ok" | "poor" }) {
+  const ref = useRef<THREE.Group>(null);
+  const mats = useMemo(() => {
+    const c = BLUEPRINT[tone];
+    return {
+      fill: new THREE.MeshBasicMaterial({ color: c.fill, transparent: true, opacity: 0.35, depthWrite: false }),
+      line: new THREE.LineBasicMaterial({ color: c.line, transparent: true, opacity: 0.6 }),
+    };
+  }, [tone]);
+  useEffect(
+    () => () => {
+      mats.fill.dispose();
+      mats.line.dispose();
+    },
+    [mats],
+  );
+  // Runs after every render: models can add or swap parts (windows, heaters) as props change.
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((o) => {
+      if ((o as THREE.Light).isLight || (o as THREE.Points).isPoints) o.visible = false;
+      else if ((o as THREE.Mesh).isMesh && !o.userData.blueprintEdge) meshes.push(o as THREE.Mesh);
+    });
+    for (const mesh of meshes) {
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.material = mats.fill;
+      if (mesh.userData.blueprintLine !== mats.line) {
+        const old = mesh.children.find((c) => c.userData.blueprintEdge) as THREE.LineSegments | undefined;
+        if (old) {
+          old.material = mats.line;
+        } else {
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 40), mats.line);
+          edges.userData.blueprintEdge = true;
+          edges.raycast = () => {};
+          mesh.add(edges);
+        }
+        mesh.userData.blueprintLine = mats.line;
+      }
+      mesh.raycast = () => {};
+    }
+  });
+  // Free the traced outlines when the blueprint goes away.
+  useEffect(
+    () => () => {
+      ref.current?.traverse((o) => {
+        if (o.userData.blueprintEdge) (o as THREE.LineSegments).geometry.dispose();
+      });
+    },
+    [],
+  );
+  return (
+    <group ref={ref}>
+      <Structure kind={kind} warmth={warmth} selected={false} />
+    </group>
+  );
 }
 
 const DEPOSIT_TILE: Record<Exclude<Deposit, "none">, string> = {
@@ -648,11 +718,8 @@ function City() {
                 kilnRunning={sim.kiln.running}
               />
             )}
-            {buildKind && hovered && !building && !isKiln && fit?.fit !== "blocked" && (
-              <mesh position={[0, 0.45, 0]}>
-                <boxGeometry args={[0.7, 0.5, 0.6]} />
-                <meshStandardMaterial color="#f2a541" transparent opacity={0.35} />
-              </mesh>
+            {buildKind && hovered && !building && !isKiln && fit && fit.fit !== "blocked" && (
+              <Blueprint kind={buildKind} warmth={w} tone={fit.fit === "ok" ? "ok" : "poor"} />
             )}
           </group>
         );
