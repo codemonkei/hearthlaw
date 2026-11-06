@@ -13,8 +13,9 @@ import * as THREE from "three";
 import type { SimState } from "@/game/sim/types";
 import { makeHeightAt } from "@/game/scene/terrain";
 import { weather } from "@/game/scene/Atmosphere";
+import { TOUCH } from "@/game/fx";
 
-const COUNT = 1600;
+const COUNT = TOUCH ? 700 : 1600;
 const SPAN = 40;
 
 const vertex = /* glsl */ `

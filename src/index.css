@@ -33,6 +33,13 @@ html, body, #root {
     backdrop-filter: blur(8px);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
   }
+  /* Phones: blurring the moving scene behind every panel, every frame, costs more than it shows. */
+  @media (pointer: coarse) {
+    .hl-panel {
+      background: color-mix(in srgb, var(--color-panel) 94%, transparent);
+      backdrop-filter: none;
+    }
+  }
   .hl-display {
     font-family: var(--font-display);
     font-weight: 600;

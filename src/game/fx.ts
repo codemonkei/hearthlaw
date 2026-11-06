@@ -15,6 +15,9 @@ export const FX_SETTINGS: Record<
   high: { dpr: [1, 1.75], shadows: true, shadowSize: 2048, post: true, multisampling: 4 },
 };
 
+/** Phones and tablets: fewer particles, since every one is moved on the CPU each frame. */
+export const TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
 /** The GPU's name, when the browser will say. */
 function gpuName(): string {
   try {

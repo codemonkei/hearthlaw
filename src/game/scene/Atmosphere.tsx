@@ -4,7 +4,7 @@ import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, ToneMapping, 
 import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { FX_SETTINGS, type FxQuality } from "@/game/fx";
+import { FX_SETTINGS, TOUCH, type FxQuality } from "@/game/fx";
 import { syncWeather } from "@/game/audio";
 import { useGame } from "@/game/store";
 
@@ -290,8 +290,8 @@ export function PostFx({ quality }: { quality: FxQuality }) {
 
 /** Falling snow that thickens and turns sideways as the storm rises. */
 export function Snowfall() {
-  const MAX = 3200;
-  const BASE = 450;
+  const MAX = TOUCH ? 1500 : 3200;
+  const BASE = TOUCH ? 300 : 450;
   const ref = useRef<THREE.Points>(null);
   const geo = useMemo(() => {
     const arr = new Float32Array(MAX * 3);

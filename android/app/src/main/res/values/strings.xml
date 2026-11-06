@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hearthlaw</string>
+    <string name="title_activity_main">Hearthlaw</string>
+    <string name="package_name">app.hearthlaw.game</string>
+    <string name="custom_url_scheme">app.hearthlaw.game</string>
+</resources>

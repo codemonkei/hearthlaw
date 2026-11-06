@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { FX_SETTINGS } from "@/game/fx";
@@ -224,6 +224,31 @@ function Structure({
   if (kind === "depot") return <Depot selected={selected} heater={heater} />;
   return <RelayVent active={kilnRunning} selected={selected} />;
 }
+
+/**
+ * A building as it stands in the city, under its snow. Memoised: the city re-renders every
+ * ten sim minutes, and rebuilding every model (and re-checking its snow) each time stalled
+ * phones for long enough to swallow taps. Only a real change in what it shows redraws it.
+ */
+const StandingBuilding = memo(function StandingBuilding(props: {
+  kind: BuildingKind;
+  warmth: number;
+  selected: boolean;
+  heater: HeaterState;
+  kilnRunning: boolean;
+}) {
+  return (
+    <Snowy>
+      <Structure {...props} />
+    </Snowy>
+  );
+});
+
+/** The Kiln redraws only when what it shows changes. */
+const KilnModel = memo(Kiln);
+
+/** Warmth to the nearest 2 %: finer steps do not show, and each one would redraw the building. */
+const step = (v: number) => Math.round(v * 50) / 50;
 
 const BLUEPRINT = {
   ok: { fill: "#6fb7ff", line: "#cfe8ff" },
@@ -747,15 +772,13 @@ function City() {
             </mesh>
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
-              <Snowy>
-                <Structure
-                  kind={building.kind}
-                  warmth={buildingWarmth(sim, building)}
-                  selected={building.id === selectedId}
-                  heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
-                  kilnRunning={sim.kiln.running}
-                />
-              </Snowy>
+              <StandingBuilding
+                kind={building.kind}
+                warmth={step(buildingWarmth(sim, building))}
+                selected={building.id === selectedId}
+                heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
+                kilnRunning={sim.kiln.running}
+              />
             )}
             {buildKind && hovered && !isKiln && fit && !grid && <TileBlueprint tone={toneOf(fit.fit)} />}
             {buildKind && hovered && !building && !isKiln && fit && fit.fit !== "blocked" && (
@@ -771,8 +794,8 @@ function City() {
       <SnowCoverClock />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <group position={[0, kilnTop, 0]} scale={[KILN_SCALE, KILN_HEIGHT, KILN_SCALE]}>
-        <Kiln
-          strain={sim.kiln.strain}
+        <KilnModel
+          strain={Math.round(sim.kiln.strain * 100) / 100}
           pressure={sim.kiln.pressure}
           surge={sim.kiln.surge}
           running={sim.kiln.running && sim.kiln.pressure > 0}
