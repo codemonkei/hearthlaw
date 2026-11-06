@@ -616,7 +616,6 @@ function City() {
               geometry={hexGeo}
               position={[0, SLAB_HALF - column / 2 + (grid ? 0 : 0.03), 0]}
               scale={[1, column, 1]}
-              rotation={[0, Math.PI / 6, 0]}
               receiveShadow
               onPointerOver={(e) => {
                 e.stopPropagation();
