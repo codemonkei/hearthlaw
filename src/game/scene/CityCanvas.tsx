@@ -60,6 +60,8 @@ import { Depot, depotHeaterFlue } from "@/game/scene/Depot";
 import { RelayVent, ventFlue } from "@/game/scene/RelayVent";
 import { DepositTile } from "@/game/scene/Deposits";
 import { useKilnLab } from "@/game/scene/kilnLab";
+import { makeHeightAt } from "@/game/scene/terrain";
+import { Walkers } from "@/game/scene/Walkers";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -587,19 +589,7 @@ function Ground({ pit }: { pit: boolean }) {
 function Snowfield({ sim }: { sim: SimState }) {
   const geo = useMemo(() => {
     const tops = sim.tiles.map((t) => hexToWorld(t.q, t.r, sim.terrain));
-    const reach = HEX_SIZE * 1.2;
-    const heightAt = (x: number, z: number) => {
-      let sum = 0;
-      let wsum = 0;
-      for (const [tx, ty, tz] of tops) {
-        const d = Math.hypot(x - tx, z - tz);
-        if (d >= reach) continue;
-        const w = (1 - d / reach) ** 4;
-        sum += w * ty;
-        wsum += w;
-      }
-      return wsum > 0 ? sum / wsum : 0;
-    };
+    const heightAt = makeHeightAt(sim);
     const index = new Map<string, number>();
     const pos: number[] = [];
     const tris: number[] = [];
@@ -772,6 +762,7 @@ function City() {
       })}
       <HeatRing sim={sim} />
       <Smoke emitters={smoke} />
+      <Walkers sim={sim} />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <group position={[0, kilnTop, 0]} scale={[KILN_SCALE, KILN_HEIGHT, KILN_SCALE]}>
         <Kiln
