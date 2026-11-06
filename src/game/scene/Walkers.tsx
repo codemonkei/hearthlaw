@@ -6,7 +6,7 @@
  * heads home, by midnight the streets are empty, and they step out again from 06:00.
  */
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { useGame } from "@/game/store";
 import { livingCount } from "@/game/sim/engine";
@@ -86,56 +86,195 @@ function route(a: [number, number], b: [number, number]): [number, number][] {
   return [[(nx / n) * r, (nz / n) * r], b];
 }
 
-function Figure({ coat, torch }: { coat: string; torch: boolean }) {
+interface Look {
+  coat: string;
+  trim: string;
+  scarf: string;
+  trousers: string;
+  skin: string;
+  torch: boolean;
+  pack: boolean;
+}
+
+const SCARVES = ["#a8352a", "#c48a2c", "#3d6b8a", "#7b8f4a", "#e0d6c2", "#8a3a5c"];
+const TROUSERS = ["#2e2a26", "#3a3530", "#2a3038", "#3b3226"];
+const SKINS = ["#e2b593", "#c99572", "#a8765a", "#f0cdb0"];
+const TRIMS = ["#ece6da", "#d9cbb4", "#bfb2a0"];
+
+/**
+ * A townsperson, about a hand tall with feet at y 0, facing +z: boots and trousers on legs that
+ * swing from the hip, a belted coat flaring over them, a fur-trimmed hood around a face, a
+ * scarf, mittens, sometimes a pack. The right hand holds the torch or lamp. Named parts
+ * (legL, legR, armL, armR, light) are posed every frame by Walkers.
+ */
+function Figure({ look }: { look: Look }) {
+  const { coat, trim, scarf, trousers, skin, torch, pack } = look;
+  const leg = (side: 1 | -1) => (
+    <group name={side === 1 ? "legL" : "legR"} position={[0.017 * side, 0.082, 0]}>
+      <mesh position={[0, -0.036, 0]} raycast={noHit} castShadow>
+        <cylinderGeometry args={[0.012, 0.011, 0.07, 6]} />
+        <meshStandardMaterial color={trousers} roughness={0.95} />
+      </mesh>
+      {/* Boot: a dark cuff and a toe pointing forward. */}
+      <mesh position={[0, -0.07, 0.008]} raycast={noHit} castShadow>
+        <boxGeometry args={[0.026, 0.024, 0.04]} />
+        <meshStandardMaterial color="#231a14" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, -0.056, 0]} raycast={noHit}>
+        <cylinderGeometry args={[0.015, 0.015, 0.01, 6]} />
+        <meshStandardMaterial color={trim} roughness={1} />
+      </mesh>
+    </group>
+  );
+  const arm = (side: 1 | -1, children?: ReactNode) => (
+    <group name={side === 1 ? "armL" : "armR"} position={[0.043 * -side, 0.158, 0]}>
+      <mesh position={[0, -0.03, 0]} rotation={[0, 0, 0.12 * side]} raycast={noHit} castShadow>
+        <cylinderGeometry args={[0.013, 0.011, 0.064, 6]} />
+        <meshStandardMaterial color={coat} roughness={0.9} />
+      </mesh>
+      {/* Fur cuff and mitten. */}
+      <mesh position={[0.004 * side, -0.06, 0]} raycast={noHit}>
+        <cylinderGeometry args={[0.014, 0.014, 0.01, 6]} />
+        <meshStandardMaterial color={trim} roughness={1} />
+      </mesh>
+      <mesh position={[0.005 * side, -0.071, 0]} raycast={noHit}>
+        <sphereGeometry args={[0.011, 6, 5]} />
+        <meshStandardMaterial color={scarf} roughness={0.95} />
+      </mesh>
+      {children}
+    </group>
+  );
   return (
     <group>
-      {/* Boots, coat, a hood with a pale fur rim. Feet at y 0. */}
-      <mesh position={[0, 0.07, 0]} raycast={noHit} castShadow>
-        <cylinderGeometry args={[0.04, 0.06, 0.14, 7]} />
+      {leg(1)}
+      {leg(-1)}
+      {/* Coat: a flared skirt over the hips, the body above, a belt between. */}
+      <mesh position={[0, 0.085, 0]} raycast={noHit} castShadow>
+        <cylinderGeometry args={[0.036, 0.05, 0.05, 8]} />
         <meshStandardMaterial color={coat} roughness={0.9} />
       </mesh>
-      <mesh position={[0, 0.17, 0]} raycast={noHit} castShadow>
-        <sphereGeometry args={[0.042, 8, 6]} />
+      <mesh position={[0, 0.0605, 0]} raycast={noHit}>
+        <cylinderGeometry args={[0.051, 0.051, 0.006, 8]} />
+        <meshStandardMaterial color={trim} roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.132, 0]} raycast={noHit} castShadow>
+        <cylinderGeometry args={[0.034, 0.036, 0.05, 8]} />
         <meshStandardMaterial color={coat} roughness={0.9} />
       </mesh>
-      <mesh position={[0, 0.168, 0.02]} rotation={[Math.PI / 2, 0, 0]} raycast={noHit}>
-        <torusGeometry args={[0.03, 0.009, 5, 10]} />
-        <meshStandardMaterial color="#e8e2d6" roughness={1} />
+      <mesh position={[0, 0.11, 0]} raycast={noHit}>
+        <cylinderGeometry args={[0.0375, 0.0375, 0.008, 8]} />
+        <meshStandardMaterial color="#2b1d14" roughness={0.7} />
       </mesh>
-      <mesh position={[0, 0.168, 0.031]} raycast={noHit}>
-        <circleGeometry args={[0.022, 8]} />
-        <meshStandardMaterial color="#2a1f1a" roughness={1} />
+      <mesh position={[0, 0.11, 0.037]} raycast={noHit}>
+        <boxGeometry args={[0.012, 0.01, 0.004]} />
+        <meshStandardMaterial color="#b08d4a" metalness={0.6} roughness={0.4} />
       </mesh>
-      {/* The arm out to the side, carrying the light ahead and a little up. Hidden by day. */}
-      <group name="light" position={[0.055, 0.12, 0.03]}>
-        {torch ? (
-          <>
-            <mesh position={[0, 0.04, 0]} raycast={noHit}>
-              <cylinderGeometry args={[0.006, 0.008, 0.12, 5]} />
-              <meshStandardMaterial color="#3b2a1d" roughness={1} />
+      {/* Coat buttons down the front. */}
+      {[0.128, 0.142].map((y) => (
+        <mesh key={y} position={[0, y, 0.035]} raycast={noHit}>
+          <sphereGeometry args={[0.003, 4, 3]} />
+          <meshStandardMaterial color="#2b1d14" />
+        </mesh>
+      ))}
+      {/* Shoulders. */}
+      <mesh position={[0, 0.157, 0]} scale={[1.25, 0.55, 1]} raycast={noHit} castShadow>
+        <sphereGeometry args={[0.034, 8, 6]} />
+        <meshStandardMaterial color={coat} roughness={0.9} />
+      </mesh>
+      {/* Scarf wound at the neck, one tail hanging down the front. */}
+      <mesh position={[0, 0.168, 0]} rotation={[Math.PI / 2, 0, 0]} raycast={noHit}>
+        <torusGeometry args={[0.019, 0.008, 5, 10]} />
+        <meshStandardMaterial color={scarf} roughness={1} />
+      </mesh>
+      <mesh position={[0.01, 0.148, 0.03]} rotation={[0.15, 0, 0.1]} raycast={noHit}>
+        <boxGeometry args={[0.01, 0.032, 0.004]} />
+        <meshStandardMaterial color={scarf} roughness={1} />
+      </mesh>
+      {/* Head: a face set inside a hood, ringed with fur. */}
+      <mesh position={[0, 0.19, 0.008]} raycast={noHit}>
+        <sphereGeometry args={[0.019, 8, 6]} />
+        <meshStandardMaterial color={skin} roughness={0.8} />
+      </mesh>
+      {[-0.007, 0.007].map((x) => (
+        <mesh key={x} position={[x, 0.193, 0.026]} raycast={noHit}>
+          <sphereGeometry args={[0.0022, 4, 3]} />
+          <meshStandardMaterial color="#1a1310" />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.194, -0.006]} scale={[1, 1.08, 1]} raycast={noHit} castShadow>
+        <sphereGeometry args={[0.03, 9, 7, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
+        <meshStandardMaterial color={coat} roughness={0.9} side={2} />
+      </mesh>
+      <mesh position={[0, 0.183, -0.012]} raycast={noHit}>
+        <sphereGeometry args={[0.028, 8, 6]} />
+        <meshStandardMaterial color={coat} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.19, 0.018]} raycast={noHit}>
+        <torusGeometry args={[0.022, 0.0075, 5, 12]} />
+        <meshStandardMaterial color={trim} roughness={1} />
+      </mesh>
+      {/* A pack on the back for those hauling something between doors. */}
+      {pack && (
+        <group position={[0, 0.13, -0.045]}>
+          <mesh raycast={noHit} castShadow>
+            <boxGeometry args={[0.05, 0.055, 0.03]} />
+            <meshStandardMaterial color="#6b5236" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.034, 0]} rotation={[0, 0, Math.PI / 2]} raycast={noHit}>
+            <cylinderGeometry args={[0.012, 0.012, 0.056, 6]} />
+            <meshStandardMaterial color="#8a7a5c" roughness={1} />
+          </mesh>
+          {[-0.018, 0.018].map((x) => (
+            <mesh key={x} position={[x, 0.01, 0.022]} raycast={noHit}>
+              <boxGeometry args={[0.006, 0.05, 0.004]} />
+              <meshStandardMaterial color="#2b1d14" />
             </mesh>
-            <mesh name="flame" position={[0, 0.115, 0]} raycast={noHit}>
-              <coneGeometry args={[0.018, 0.05, 6]} />
-              <meshStandardMaterial color="#ffb347" emissive="#ff7a1a" emissiveIntensity={2.4} toneMapped={false} />
-            </mesh>
-          </>
-        ) : (
-          <>
-            <mesh position={[0, 0.03, 0]} raycast={noHit}>
-              <boxGeometry args={[0.026, 0.006, 0.026]} />
-              <meshStandardMaterial color="#2b2b2b" metalness={0.5} roughness={0.5} />
-            </mesh>
-            <mesh name="flame" position={[0, 0.012, 0]} raycast={noHit}>
-              <boxGeometry args={[0.022, 0.03, 0.022]} />
-              <meshStandardMaterial color="#ffe0a0" emissive="#ffc35a" emissiveIntensity={2} toneMapped={false} />
-            </mesh>
-            <mesh position={[0, -0.006, 0]} raycast={noHit}>
-              <boxGeometry args={[0.028, 0.006, 0.028]} />
-              <meshStandardMaterial color="#2b2b2b" metalness={0.5} roughness={0.5} />
-            </mesh>
-          </>
-        )}
-      </group>
+          ))}
+        </group>
+      )}
+      {arm(1)}
+      {arm(
+        -1,
+        // The light hangs from the right hand; Walkers keeps it upright as the arm moves.
+        <group name="light" position={[-0.005, -0.075, 0]}>
+          {torch ? (
+            <>
+              <mesh position={[0, 0.035, 0]} raycast={noHit}>
+                <cylinderGeometry args={[0.005, 0.007, 0.11, 5]} />
+                <meshStandardMaterial color="#3b2a1d" roughness={1} />
+              </mesh>
+              <mesh position={[0, 0.088, 0]} raycast={noHit}>
+                <cylinderGeometry args={[0.011, 0.008, 0.016, 6]} />
+                <meshStandardMaterial color="#1e1915" roughness={0.9} />
+              </mesh>
+              <mesh name="flame" position={[0, 0.112, 0]} raycast={noHit}>
+                <coneGeometry args={[0.016, 0.046, 6]} />
+                <meshStandardMaterial color="#ffb347" emissive="#ff7a1a" emissiveIntensity={2.4} toneMapped={false} />
+              </mesh>
+            </>
+          ) : (
+            <group position={[0, -0.03, 0]}>
+              {/* Bail handle, cap, glass, base. */}
+              <mesh position={[0, 0.032, 0]} rotation={[Math.PI / 2, 0, 0]} raycast={noHit}>
+                <torusGeometry args={[0.008, 0.0015, 4, 8, Math.PI]} />
+                <meshStandardMaterial color="#2b2b2b" metalness={0.6} roughness={0.5} />
+              </mesh>
+              <mesh position={[0, 0.024, 0]} raycast={noHit}>
+                <coneGeometry args={[0.014, 0.012, 6]} />
+                <meshStandardMaterial color="#2b2b2b" metalness={0.6} roughness={0.5} />
+              </mesh>
+              <mesh name="flame" position={[0, 0.006, 0]} raycast={noHit}>
+                <cylinderGeometry args={[0.01, 0.011, 0.024, 6]} />
+                <meshStandardMaterial color="#ffe0a0" emissive="#ffc35a" emissiveIntensity={2} toneMapped={false} />
+              </mesh>
+              <mesh position={[0, -0.009, 0]} raycast={noHit}>
+                <cylinderGeometry args={[0.013, 0.013, 0.006, 6]} />
+                <meshStandardMaterial color="#2b2b2b" metalness={0.6} roughness={0.5} />
+              </mesh>
+            </group>
+          )}
+        </group>,
+      )}
     </group>
   );
 }
@@ -144,7 +283,9 @@ export function Walkers({ sim }: { sim: SimState }) {
   const fx = useGame((s) => s.fx);
   const heightAt = useMemo(() => makeHeightAt(sim), [sim]);
   const living = livingCount(sim);
-  const count = sim.buildings.length === 0 ? 0 : Math.min(MAX_WALKERS, Math.max(2, Math.round(living / 7)));
+  // Low graphics (phones, weak GPUs) keeps the crowd smaller: each figure is a few dozen parts.
+  const cap = fx === "low" ? 8 : MAX_WALKERS;
+  const count = sim.buildings.length === 0 ? 0 : Math.min(cap, Math.max(2, Math.round(living / 7)));
   // A few carry real light on better graphics tiers; the rest glow through bloom alone.
   const lit = fx === "high" ? 4 : fx === "medium" ? 2 : 0;
 
@@ -152,7 +293,12 @@ export function Walkers({ sim }: { sim: SimState }) {
     () =>
       Array.from({ length: MAX_WALKERS }, (_, i) => ({
         coat: COATS[i % COATS.length],
+        trim: TRIMS[i % TRIMS.length],
+        scarf: SCARVES[(i * 5 + 2) % SCARVES.length],
+        trousers: TROUSERS[(i * 3) % TROUSERS.length],
+        skin: SKINS[(i * 7 + 1) % SKINS.length],
         torch: i % 3 !== 1,
+        pack: i % 4 === 2 || i % 5 === 0,
       })),
     [],
   );
@@ -335,17 +481,34 @@ export function Walkers({ sim }: { sim: SimState }) {
         }
       }
 
-      if (moving) w.bob += dt * pace * 14;
+      if (moving) w.bob += dt * pace * 9;
       const bounce = moving ? Math.abs(Math.sin(w.bob)) * 0.02 : 0;
       g.position.set(w.x, heightAt(w.x, w.z) + bounce, w.z);
-      g.rotation.set(0, w.heading, moving ? Math.sin(w.bob) * 0.06 : 0);
+      g.rotation.set(0, w.heading, moving ? Math.sin(w.bob) * 0.04 : 0);
       // Lights only once the sky has darkened enough for this one to want one.
       const dark = weather.daylight < w.lightAt;
-      const carried = g.getObjectByName("light");
-      if (carried) carried.visible = dark;
-      const lamp = g.getObjectByName("lamp") as THREE.PointLight | undefined;
+      const parts = (g.userData.parts ??= {
+        legL: g.getObjectByName("legL"),
+        legR: g.getObjectByName("legR"),
+        armL: g.getObjectByName("armL"),
+        armR: g.getObjectByName("armR"),
+        light: g.getObjectByName("light"),
+      }) as Record<"legL" | "legR" | "armL" | "armR" | "light", THREE.Object3D | undefined>;
+      // A walking stride: legs swing opposite, the free arm against its leg; at rest, still.
+      const swing = moving ? Math.sin(w.bob) : 0;
+      if (parts.legL) parts.legL.rotation.x = swing * 0.55;
+      if (parts.legR) parts.legR.rotation.x = -swing * 0.55;
+      if (parts.armL) parts.armL.rotation.x = -swing * 0.45;
+      // The light hand is held out in front; empty-handed it swings like the other.
+      if (parts.armR) parts.armR.rotation.x = dark ? -0.75 + swing * 0.08 : swing * 0.45;
+      const carried = parts.light;
+      if (carried) {
+        carried.visible = dark;
+        carried.rotation.x = -(parts.armR?.rotation.x ?? 0);
+      }
+      const lamp = (g.userData.lamp ??= g.getObjectByName("lamp")) as THREE.PointLight | undefined;
       if (lamp) lamp.intensity = dark ? POINT_LIGHT : 0;
-      const flame = g.getObjectByName("flame");
+      const flame = (g.userData.flame ??= g.getObjectByName("flame")) as THREE.Object3D | undefined;
       if (flame && dark) {
         const f = 1 + Math.sin(clock.current * 17 + i * 3.1) * 0.12 + Math.sin(clock.current * 29 + i) * 0.08;
         flame.scale.set(1, f, 1);
@@ -379,10 +542,10 @@ export function Walkers({ sim }: { sim: SimState }) {
       {looks.map((look, i) => (
         <group key={i} ref={(el) => (groups.current[i] = el)} visible={false}>
           <group scale={FIGURE_SCALE}>
-            <Figure coat={look.coat} torch={look.torch} />
+            <Figure look={look} />
           </group>
           {/* Kept mounted and dimmed to 0 by day: switching lights on and off would recompile every shader. */}
-          {i < lit && <pointLight name="lamp" position={[0.1, 0.42, 0.06]} color={look.torch ? "#ff9a3c" : "#ffd27a"} intensity={0} distance={1.6} decay={2} />}
+          {i < lit && <pointLight name="lamp" position={[0.08, 0.36, 0.1]} color={look.torch ? "#ff9a3c" : "#ffd27a"} intensity={0} distance={1.6} decay={2} />}
         </group>
       ))}
     </group>
