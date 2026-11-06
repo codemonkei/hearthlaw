@@ -464,6 +464,83 @@ function Ground({ pit }: { pit: boolean }) {
   );
 }
 
+/**
+ * Out of build mode the map is one continuous snowfield instead of hex slabs. Each point
+ * takes its height from the nearby tile tops, weighted so a tile's middle stays level with
+ * its own top (where buildings stand) and only the band near its edge eases into the next.
+ */
+function Snowfield({ sim }: { sim: SimState }) {
+  const geo = useMemo(() => {
+    const tops = sim.tiles.map((t) => hexToWorld(t.q, t.r, sim.terrain));
+    const reach = HEX_SIZE * 1.2;
+    const heightAt = (x: number, z: number) => {
+      let sum = 0;
+      let wsum = 0;
+      for (const [tx, ty, tz] of tops) {
+        const d = Math.hypot(x - tx, z - tz);
+        if (d >= reach) continue;
+        const w = (1 - d / reach) ** 4;
+        sum += w * ty;
+        wsum += w;
+      }
+      return wsum > 0 ? sum / wsum : 0;
+    };
+    const index = new Map<string, number>();
+    const pos: number[] = [];
+    const tris: number[] = [];
+    const vert = (x: number, z: number) => {
+      const k = `${Math.round(x * 1000)}:${Math.round(z * 1000)}`;
+      let i = index.get(k);
+      if (i == null) {
+        i = pos.length / 3;
+        index.set(k, i);
+        pos.push(x, heightAt(x, z), z);
+      }
+      return i;
+    };
+    const N = 4;
+    for (const [cx, , cz] of tops) {
+      const corners = Array.from({ length: 6 }, (_, i) => {
+        const a = (Math.PI / 180) * (60 * i - 30);
+        return [cx + HEX_SIZE * Math.cos(a), cz + HEX_SIZE * Math.sin(a)] as const;
+      });
+      for (let s = 0; s < 6; s++) {
+        const [ax, az] = corners[s];
+        const [bx, bz] = corners[(s + 1) % 6];
+        // Subdivide the wedge (centre, a, b) into N² small triangles.
+        const p = (i: number, j: number) => {
+          const u = i / N;
+          const v = j / N;
+          return vert(cx + (ax - cx) * u + (bx - ax) * v, cz + (az - cz) * u + (bz - az) * v);
+        };
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j <= i; j++) {
+            tris.push(p(i, j), p(i + 1, j + 1), p(i + 1, j));
+            if (j < i) tris.push(p(i, j), p(i, j + 1), p(i + 1, j + 1));
+          }
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(tris);
+    g.computeVertexNormals();
+    // Face up whichever way the winding came out.
+    const n = g.getAttribute("normal");
+    if (n.getY(0) < 0) {
+      g.setIndex(tris.map((_, i, a) => a[i - (i % 3) + (2 - (i % 3))]));
+      g.computeVertexNormals();
+    }
+    return g;
+  }, [sim.tiles, sim.terrain]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <mesh geometry={geo} receiveShadow>
+      <meshStandardMaterial color="#d5dee6" roughness={0.92} metalness={0.02} />
+    </mesh>
+  );
+}
+
 function City() {
   const rev = useGame((s) => s.rev);
   const heat = useGame((s) => s.heat);
@@ -478,10 +555,12 @@ function City() {
   // Touch has no hover: the tile waiting for confirmation stands in for it.
   const hover = hoverKey ?? (pendingTile ? `${pendingTile.q}:${pendingTile.r}` : null);
   const hexGeo = useMemo(() => new THREE.CylinderGeometry(HEX_SIZE * 0.94, HEX_SIZE * 0.96, 1, 6), []);
+  // Outside build mode the hexes close up into one snowfield; the grid only shows when it is needed.
 
   if (!sim) return null;
   void rev;
 
+  const grid = Boolean(buildKind) || heat;
   const temp = outdoorTemp(sim.minute);
   const band = outdoorBand(temp);
   const hoverInfo: { label: Label | null } = { label: null };
@@ -495,6 +574,7 @@ function City() {
     <group>
       <Ground pit={sim.terrain === "pit"} />
       <Nature sim={sim} fallback={<SimpleNature sim={sim} />} />
+      {!grid && <Snowfield sim={sim} />}
       {sim.tiles.map((tile) => {
         const [x, top, z] = hexToWorld(tile.q, tile.r, sim.terrain);
         // Group origin stays at the old slab centre so structure offsets are unchanged.
@@ -513,14 +593,15 @@ function City() {
         for (const flue of building ? chimneys(building.kind, sim.kiln.running) : []) {
           smoke.push({ pos: [x + flue.at[0], y + flue.at[1], z + flue.at[2]], strength: flue.strength });
         }
-        let color = deposit === "none" ? "#d5dee6" : DEPOSIT_TILE[deposit];
+        let color = deposit === "none" || !grid ? "#d5dee6" : DEPOSIT_TILE[deposit];
         if (heat && !isKiln) color = heatHex(building ? buildingWarmth(sim, building) : w);
         const fit: PlacementFit | null = buildKind && !isKiln ? assessPlacement(sim, buildKind, tile.q, tile.r) : null;
         // Occupied tiles just dim; red is kept for open ground this building cannot use.
         if (fit && fit.fit !== "ok") color = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
         const hovered = hover === key;
         if (hovered) {
-          color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
+          // Out of build mode only buildings light up; bare ground keeps the field seamless.
+          if (grid || building) color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
           const at: [number, number, number] = [x, top + (building || isKiln ? 1.7 : 1.1), z];
           if (fit && buildKind && !building) {
             hoverInfo.label = { at, title: BUILDINGS[buildKind].name, fit: fit.fit, note: fit.note };
@@ -555,7 +636,8 @@ function City() {
                 select(building ? building.id : null);
               }}
             >
-              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} />
+              {/* Hidden (but still tappable) under the snowfield outside build mode. */}
+              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid} />
             </mesh>
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
