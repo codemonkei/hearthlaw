@@ -63,6 +63,7 @@ import { useKilnLab } from "@/game/scene/kilnLab";
 import { makeHeightAt } from "@/game/scene/terrain";
 import { Walkers } from "@/game/scene/Walkers";
 import { Spindrift } from "@/game/scene/Spindrift";
+import { Snowy, SnowCoverClock } from "@/game/scene/snowCover";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -746,13 +747,15 @@ function City() {
             </mesh>
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
-              <Structure
-                kind={building.kind}
-                warmth={buildingWarmth(sim, building)}
-                selected={building.id === selectedId}
-                heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
-                kilnRunning={sim.kiln.running}
-              />
+              <Snowy>
+                <Structure
+                  kind={building.kind}
+                  warmth={buildingWarmth(sim, building)}
+                  selected={building.id === selectedId}
+                  heater={building.heater ? (building.heaterFed ? "lit" : "cold") : "none"}
+                  kilnRunning={sim.kiln.running}
+                />
+              </Snowy>
             )}
             {buildKind && hovered && !isKiln && fit && !grid && <TileBlueprint tone={toneOf(fit.fit)} />}
             {buildKind && hovered && !building && !isKiln && fit && fit.fit !== "blocked" && (
@@ -765,6 +768,7 @@ function City() {
       <Smoke emitters={smoke} />
       <Walkers sim={sim} />
       <Spindrift sim={sim} />
+      <SnowCoverClock />
       {hoverInfo.label && <HoverLabel {...hoverInfo.label} />}
       <group position={[0, kilnTop, 0]} scale={[KILN_SCALE, KILN_HEIGHT, KILN_SCALE]}>
         <Kiln
