@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   BookOpen,
   Lightbulb,
+  LogOut,
   HousePlus,
   Eye,
   FastForward,
@@ -13,13 +14,12 @@ import {
   RotateCcw,
   ScrollText,
   Snowflake,
-  Sparkles,
+  Save,
+  Settings,
   TreePine,
   Users,
   Utensils,
-  Volume2,
   Wrench,
-  VolumeX,
   X,
 } from "lucide-react";
 import {
@@ -56,7 +56,8 @@ import {
   weakestAxis,
 } from "@/game/sim/engine";
 import type { BuildingKind, CircleId, ClauseId, DealKind } from "@/game/sim/types";
-import { FX_LABEL } from "@/game/fx";
+import { FX_LABEL, FX_ORDER } from "@/game/fx";
+import { Segmented } from "@/game/ui/Segmented";
 import { currentTip } from "@/game/ui/tips";
 import { buildingIcon } from "@/game/ui/buildingIcons";
 import { useGame } from "@/game/store";
@@ -95,6 +96,7 @@ export function PlayChrome() {
       <Dock />
       <BottomBar />
       <TestModePanel />
+      {useGame.getState().panel === "settings" && <SettingsOverlay />}
       {sim.pendingEvent && <EventCard />}
       {over && <EndCard />}
     </div>
@@ -256,16 +258,8 @@ function KilnCard() {
 function SideButtons() {
   const setPanel = useGame((s) => s.setPanel);
   const toggleHeat = useGame((s) => s.toggleHeat);
-  const toggleMute = useGame((s) => s.toggleMute);
   const heat = useGame((s) => s.heat);
-  const fx = useGame((s) => s.fx);
-  const toggleFx = useGame((s) => s.toggleFx);
-  const reset = useGame((s) => s.reset);
-  const toggleTestMode = useGame((s) => s.toggleTestMode);
-  const tips = useGame((s) => s.tips);
-  const setTips = useGame((s) => s.setTips);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const sim = useGame.getState().sim!;
+  const panel = useGame((s) => s.panel);
   const Btn = ({
     label,
     onClick,
@@ -280,21 +274,23 @@ function SideButtons() {
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       className={`flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line ${active ? "bg-ember text-ink" : "bg-panel text-snow"}`}
       onClick={onClick}
     >
       {children}
     </button>
   );
+  // Only what play needs lives here; everything else is behind the gear.
   return (
     <div className="pointer-events-auto absolute top-2 right-2 flex flex-col gap-2">
-      <Btn label="Charter" onClick={() => setPanel("charter")}>
+      <Btn label="Charter" onClick={() => setPanel("charter")} active={panel === "charter"}>
         <ScrollText className="size-5" />
       </Btn>
-      <Btn label="Survey" onClick={() => setPanel("survey")}>
+      <Btn label="Survey" onClick={() => setPanel("survey")} active={panel === "survey"}>
         <BookOpen className="size-5" />
       </Btn>
-      <Btn label="Chronicle" onClick={() => setPanel("chronicle")}>
+      <Btn label="Chronicle" onClick={() => setPanel("chronicle")} active={panel === "chronicle"}>
         <Users className="size-5" />
       </Btn>
       {/* On phones the heat overlay lives on the left rail with the other map tools. */}
@@ -303,32 +299,129 @@ function SideButtons() {
           <Eye className="size-5" />
         </Btn>
       </div>
-      <Btn label={`Graphics: ${FX_LABEL[fx]} (G)`} onClick={toggleFx}>
-        <span className="relative">
-          <Sparkles className="size-5" />
-          <span className="absolute -right-2.5 -bottom-2 rounded bg-ember px-1 text-[0.6rem] leading-tight font-semibold text-ink">
-            {FX_LABEL[fx][0]}
-          </span>
-        </span>
+      <Btn label="Settings" onClick={() => setPanel("settings")}>
+        <Settings className="size-5" />
       </Btn>
-      <Btn label="How the cold works" onClick={() => setPanel("help")}>
-        <Snowflake className="size-5" />
-      </Btn>
-      <Btn label={tips ? "Tips: on" : "Tips: off"} onClick={() => setTips(!tips)} active={tips}>
-        <Lightbulb className="size-5" />
-      </Btn>
-      <Btn label={sim.muted ? "Unmute" : "Mute"} onClick={toggleMute}>
-        {sim.muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-      </Btn>
-      <Btn label={sim.testMode ? "Test mode: on" : "Test mode"} onClick={toggleTestMode} active={Boolean(sim.testMode)}>
-        <Wrench className="size-5" />
-      </Btn>
-      <div className="relative mt-2">
-        <Btn label="Reset the game" onClick={() => setConfirmReset((v) => !v)} active={confirmReset}>
-          <RotateCcw className="size-5" />
-        </Btn>
+    </div>
+  );
+}
+
+/** Full-screen pause menu: everything that is not needed to play. The clock stops while it is open. */
+function SettingsOverlay() {
+  const setPanel = useGame((s) => s.setPanel);
+  const fx = useGame((s) => s.fx);
+  const setFx = useGame((s) => s.setFx);
+  const tips = useGame((s) => s.tips);
+  const setTips = useGame((s) => s.setTips);
+  const toggleMute = useGame((s) => s.toggleMute);
+  const toggleTestMode = useGame((s) => s.toggleTestMode);
+  const reset = useGame((s) => s.reset);
+  const quit = useGame((s) => s.quit);
+  const savedAt = useGame((s) => s.savedAt);
+  const flushSave = useGame((s) => s.flushSave);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const sim = useGame.getState().sim!;
+  // Opening the menu is a natural moment to write the save.
+  useEffect(() => {
+    flushSave();
+  }, [flushSave]);
+  const label = "hl-kicker w-24 shrink-0";
+  const row = "flex items-center gap-3";
+  return (
+    <div
+      className="pointer-events-auto fixed inset-0 z-40 overflow-y-auto bg-ink/85 backdrop-blur-sm"
+      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+    >
+      <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-5 px-5 py-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="hl-kicker">The watch is paused</p>
+            <h2 className="hl-display text-3xl">Settings</h2>
+          </div>
+          <button type="button" aria-label="Close settings" className="min-h-11 min-w-11 rounded-lg bg-panel-2" onClick={() => setPanel(null)}>
+            <X className="mx-auto size-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className={row}>
+            <p className={label}>Graphics</p>
+            <div className="min-w-0 flex-1">
+              <Segmented label="Graphics" value={fx} options={FX_ORDER} name={(q) => FX_LABEL[q]} onChange={setFx} />
+            </div>
+          </div>
+          <div className={row}>
+            <p className={label}>Tips</p>
+            <div className="min-w-0 flex-1">
+              <Segmented label="Tips" value={tips ? "on" : "off"} options={["on", "off"]} name={(v) => (v === "on" ? "Guide me" : "No tips")} onChange={(v) => setTips(v === "on")} />
+            </div>
+          </div>
+          <div className={row}>
+            <p className={label}>Sound</p>
+            <div className="min-w-0 flex-1">
+              <Segmented
+                label="Sound"
+                value={sim.muted ? "off" : "on"}
+                options={["on", "off"]}
+                name={(v) => (v === "on" ? "On" : "Muted")}
+                onChange={(v) => {
+                  if ((v === "off") !== Boolean(sim.muted)) toggleMute();
+                }}
+              />
+            </div>
+          </div>
+          <div className={row}>
+            <p className={label}>Test mode</p>
+            <div className="min-w-0 flex-1">
+              <Segmented
+                label="Test mode"
+                value={sim.testMode ? "on" : "off"}
+                options={["off", "on"]}
+                name={(v) => (v === "on" ? "On" : "Off")}
+                onChange={(v) => {
+                  if ((v === "on") !== Boolean(sim.testMode)) toggleTestMode();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <button type="button" className="flex min-h-11 items-center gap-3 rounded-xl border border-line bg-panel px-4 text-left text-sm" onClick={() => setPanel("help")}>
+          <Snowflake className="size-5 shrink-0 text-ember" />
+          <span>How the cold works</span>
+        </button>
+
+        <div className="hl-panel space-y-1 p-3 text-xs leading-relaxed text-mist">
+          <p className="flex items-center gap-2 text-snow">
+            <Save className="size-4 shrink-0 text-ember" />
+            {savedAt ? "Saved just now · autosave on" : "Autosave on"}
+          </p>
+          <p>The city saves itself as you play and whenever you leave the page. Close the browser any time and pick up later with Continue.</p>
+          <p>
+            {difficultyOf(sim).label} · seed {sim.seed}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-panel-2 px-3 text-sm" onClick={quit}>
+            <LogOut className="size-4" />
+            Save and quit
+          </button>
+          <button
+            type="button"
+            aria-expanded={confirmReset}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-panel-2 px-3 text-sm text-blood"
+            onClick={() => setConfirmReset((v) => !v)}
+          >
+            <RotateCcw className="size-4" />
+            Abandon city
+          </button>
+        </div>
         {confirmReset && (
-          <div className="absolute top-0 right-full mr-2 w-60 hl-panel p-3 text-left">
+          <div className="hl-panel p-3">
             <p className="hl-display text-base leading-tight">Abandon this city?</p>
             <p className="mt-1 text-xs leading-relaxed text-mist">The save is deleted and you return to the title. This cannot be undone.</p>
             <div className="mt-3 flex gap-2">
@@ -340,7 +433,7 @@ function SideButtons() {
                   reset();
                 }}
               >
-                Reset
+                Abandon
               </button>
               <button type="button" className="min-h-10 flex-1 rounded-lg bg-panel-2 px-3 text-sm" onClick={() => setConfirmReset(false)}>
                 Cancel
@@ -348,6 +441,10 @@ function SideButtons() {
             </div>
           </div>
         )}
+
+        <button type="button" className="min-h-12 rounded-xl bg-ember px-4 font-semibold text-ink" onClick={() => setPanel(null)}>
+          Back to the watch
+        </button>
       </div>
     </div>
   );
@@ -963,7 +1060,7 @@ function HelpBook() {
         <p>Pressure is how hot. Radius is how far, and it multiplies the Kiln’s thirst. Surge adds a band instantly and strains the vessel. The second time strain breaks the Kiln, the city ends.</p>
         <p>People in canvas are one band warmer than people left in the wind. Huts and longhouses are warmer still. Illness follows the band. An infirmary, staffed by specialists, pulls them back.</p>
         <p>Hands go first to the infirmary, then the survey, then the mess, then the yards. Build only what you can staff. Eat at dawn: one meal each. The Hush is days 6 and 7. Win by reaching dawn of day 8.</p>
-        <p>Peat seams show dark cut trenches. Groves have pines. Scrap is a rusty heap. Lichen is green moss. The amber outline is how far the Kiln’s warmth reaches, and the eye button paints every tile by warmth. The sparkle button (G) switches between full and light graphics.</p>
+        <p>Peat seams show dark cut trenches. Groves have pines. Scrap is a rusty heap. Lichen is green moss. The amber outline is how far the Kiln’s warmth reaches, and the eye button paints every tile by warmth. Graphics, tips and sound sit behind the gear; G cycles the graphics tier.</p>
       </div>
     </Sheet>
   );

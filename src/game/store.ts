@@ -65,7 +65,7 @@ function loadDifficulty(): Difficulty {
   return v === "easy" || v === "hard" ? v : "medium";
 }
 
-export type PanelId = "charter" | "chronicle" | "help" | "survey" | null;
+export type PanelId = "charter" | "chronicle" | "help" | "survey" | "settings" | null;
 
 interface Result {
   ok: boolean;
@@ -101,6 +101,12 @@ interface GameStore {
   resume: () => void;
   /** Abandon the current city: delete the save and return to the title. */
   reset: () => void;
+  /** Save and return to the title; Continue picks the city up again. */
+  quit: () => void;
+  /** Write the save now (the page is being hidden or closed). */
+  flushSave: () => void;
+  /** Real time of the last save, for the Settings line. */
+  savedAt: number | null;
   drive: (dt: number) => void;
   setSpeed: (speed: 0 | 1 | 2 | 4) => void;
   togglePause: () => void;
@@ -149,7 +155,7 @@ export const useGame = create<GameStore>((set, get) => {
       saveSim(sim);
       touchAudio(sim);
     }
-    set({ rev: get().rev + 1, notice: notice === undefined ? get().notice : notice });
+    set({ rev: get().rev + 1, savedAt: sim ? Date.now() : get().savedAt, notice: notice === undefined ? get().notice : notice });
   };
 
   const apply = (fn: (sim: SimState) => Result | void) => {
@@ -176,6 +182,7 @@ export const useGame = create<GameStore>((set, get) => {
     deals: {},
     notice: null,
     pendingTile: null,
+    savedAt: null,
     coarse: false,
     boot: () => {
       const coarse =
@@ -219,6 +226,29 @@ export const useGame = create<GameStore>((set, get) => {
         pendingTile: null,
       });
     },
+    quit: () => {
+      const sim = get().sim;
+      if (sim) saveSim(sim);
+      acc = 0;
+      set({
+        sim: null,
+        phase: "title",
+        rev: get().rev + 1,
+        buildKind: null,
+        selectedId: null,
+        panel: null,
+        heat: false,
+        notice: null,
+        pendingTile: null,
+      });
+    },
+    flushSave: () => {
+      const sim = get().sim;
+      if (sim && get().phase === "play") {
+        saveSim(sim);
+        set({ savedAt: Date.now() });
+      }
+    },
     resume: () => {
       const sim = loadSim();
       if (!sim) return;
@@ -240,6 +270,8 @@ export const useGame = create<GameStore>((set, get) => {
     drive: (dt: number) => {
       const sim = get().sim;
       if (!sim || sim.outcome || sim.pendingEvent || sim.speed === 0) return;
+      // The Settings overlay holds the clock, like a pause menu.
+      if (get().panel === "settings") return;
       if (typeof document !== "undefined" && document.hidden) return;
       acc += Math.min(dt, 0.1) * sim.speed * 10;
       let steps = 0;
@@ -256,9 +288,12 @@ export const useGame = create<GameStore>((set, get) => {
       const crossed = (every: number) => Math.floor(sim.minute / every) !== Math.floor(start / every);
       if (sim.outcome) store(PLAYED_KEY, "1");
       if (crossed(10) || sim.pendingEvent || sim.outcome) {
-        if (crossed(60) || sim.pendingEvent || sim.outcome) saveSim(sim);
+        // Autosave every couple of real seconds at most; hiding the page saves at once anyway.
+        const now = Date.now();
+        const due = sim.pendingEvent || sim.outcome || now - (get().savedAt ?? 0) > 2000;
+        if (due) saveSim(sim);
         touchAudio(sim);
-        set({ rev: get().rev + 1 });
+        set({ rev: get().rev + 1, savedAt: due ? now : get().savedAt });
       }
     },
     setSpeed: (speed) => {

@@ -11,6 +11,7 @@ import { Flame, ScrollText, Landmark } from "lucide-react";
 import { DIFFICULTY } from "@/game/sim/content";
 import { FX_LABEL, FX_ORDER } from "@/game/fx";
 import type { Difficulty } from "@/game/sim/types";
+import { Segmented } from "@/game/ui/Segmented";
 
 export function GameApp() {
   const phase = useGame((s) => s.phase);
@@ -55,9 +56,18 @@ export function GameApp() {
       }
     };
     window.addEventListener("keydown", onKey);
+    // Phones kill background tabs without warning: save the moment the game leaves the screen.
+    const flush = () => useGame.getState().flushSave();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
     return () => {
       unbind();
       window.removeEventListener("keydown", onKey);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
       clearKeys();
     };
   }, [boot, setPanel, setSpeed, toggleFx, toggleHeat, togglePause]);
@@ -167,37 +177,6 @@ function Title({
 
 const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
 
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  name,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: T[];
-  name: (v: T) => string;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-xl border border-line bg-panel p-1">
-      {options.map((o) => (
-        <button
-          key={o}
-          type="button"
-          role="radio"
-          aria-checked={value === o}
-          className={`min-h-9 flex-1 rounded-lg px-2 text-sm sm:min-h-10 sm:px-3 ${value === o ? "bg-ember text-ink" : "text-mist"}`}
-          onClick={() => onChange(o)}
-        >
-          {name(o)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** New-game difficulty and the graphics tier (first set from the device, changeable any time). */
 function Settings() {
   const difficulty = useGame((s) => s.difficulty);
@@ -235,7 +214,7 @@ function Settings() {
             <Segmented label="Tips" value={tips ? "on" : "off"} options={["on", "off"]} name={(v) => (v === "on" ? "Guide me" : "No tips")} onChange={(v) => setTips(v === "on")} />
           </div>
         </div>
-        <p className="mt-2 hidden text-xs leading-snug text-mist sm:block">On for a first watch, off once you have played one. The bulb button switches them in play.</p>
+        <p className="mt-2 hidden text-xs leading-snug text-mist sm:block">On for a first watch, off once you have played one. Settings (the gear) switches them in play.</p>
       </div>
     </div>
   );
