@@ -224,14 +224,59 @@ function Structure({
 const BLUEPRINT = {
   ok: { fill: "#6fb7ff", line: "#cfe8ff" },
   poor: { fill: "#f2a541", line: "#ffe2b0" },
+  blocked: { fill: "#e0564b", line: "#ffc2bc" },
 } as const;
+
+type BlueprintTone = keyof typeof BLUEPRINT;
+
+/** Best and fair spots read blue, poor ones amber, impossible ones red. */
+const toneOf = (fit: PlacementFit["fit"]): BlueprintTone => (fit === "best" || fit === "ok" ? "ok" : fit);
+
+/**
+ * The hovered tile in build mode, in the blueprint's style: a see-through hex with a traced
+ * rim, lifted a little so the snowfield's gentle slope does not bury its edges.
+ */
+function TileBlueprint({ tone }: { tone: BlueprintTone }) {
+  const { fill, line, hex, rim } = useMemo(() => {
+    const c = BLUEPRINT[tone];
+    const hex = new THREE.CircleGeometry(HEX_SIZE * 0.97, 6);
+    // CircleGeometry lies in XY with a corner on +X; stand it flat with a corner on +Z (pointy layout).
+    hex.rotateZ(Math.PI / 2);
+    hex.rotateX(-Math.PI / 2);
+    const pts = Array.from({ length: 7 }, (_, i) => {
+      const a = (Math.PI / 3) * i;
+      return new THREE.Vector3(HEX_SIZE * 0.97 * Math.sin(a), 0, HEX_SIZE * 0.97 * Math.cos(a));
+    });
+    return {
+      hex,
+      rim: new THREE.BufferGeometry().setFromPoints(pts),
+      fill: new THREE.MeshBasicMaterial({ color: c.fill, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      line: new THREE.LineBasicMaterial({ color: c.line, transparent: true, opacity: 0.85 }),
+    };
+  }, [tone]);
+  useEffect(
+    () => () => {
+      hex.dispose();
+      rim.dispose();
+      fill.dispose();
+      line.dispose();
+    },
+    [hex, rim, fill, line],
+  );
+  return (
+    <group position={[0, TILE_TOP_LOCAL + 0.06, 0]}>
+      <mesh geometry={hex} material={fill} renderOrder={2} raycast={() => {}} />
+      <lineLoop geometry={rim} material={line} renderOrder={3} raycast={() => {}} />
+    </group>
+  );
+}
 
 /**
  * The building a tap would place, drawn as a blueprint: the real model in see-through blue
  * with its outlines traced, amber when the spot is poor. It only swaps materials on its own
  * copy of the model, so the shared ones the city uses are never touched.
  */
-function Blueprint({ kind, warmth, tone }: { kind: BuildingKind; warmth: number; tone: "ok" | "poor" }) {
+function Blueprint({ kind, warmth, tone }: { kind: BuildingKind; warmth: number; tone: BlueprintTone }) {
   const ref = useRef<THREE.Group>(null);
   const mats = useMemo(() => {
     const c = BLUEPRINT[tone];
@@ -705,8 +750,8 @@ function City() {
                 select(building ? building.id : null);
               }}
             >
-              {/* Hidden (but still tappable) under the snowfield, except the tile a build would land on. */}
-              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid || (Boolean(buildKind) && hovered)} />
+              {/* Hidden (but still tappable) under the snowfield; the heat overlay shows them all. */}
+              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid} />
             </mesh>
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (
@@ -718,8 +763,9 @@ function City() {
                 kilnRunning={sim.kiln.running}
               />
             )}
+            {buildKind && hovered && !isKiln && fit && !grid && <TileBlueprint tone={toneOf(fit.fit)} />}
             {buildKind && hovered && !building && !isKiln && fit && fit.fit !== "blocked" && (
-              <Blueprint kind={buildKind} warmth={w} tone={fit.fit === "ok" ? "ok" : "poor"} />
+              <Blueprint kind={buildKind} warmth={w} tone={toneOf(fit.fit)} />
             )}
           </group>
         );
