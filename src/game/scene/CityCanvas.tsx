@@ -560,7 +560,8 @@ function City() {
   if (!sim) return null;
   void rev;
 
-  const grid = Boolean(buildKind) || heat;
+  // The full grid only for the heat overlay; in build mode just the tile under the pointer shows.
+  const grid = heat;
   const temp = outdoorTemp(sim.minute);
   const band = outdoorBand(temp);
   const hoverInfo: { label: Label | null } = { label: null };
@@ -600,8 +601,7 @@ function City() {
         if (fit && fit.fit !== "ok") color = FIT_TILE[building && fit.fit === "blocked" ? "poor" : fit.fit];
         const hovered = hover === key;
         if (hovered) {
-          // Out of build mode only buildings light up; bare ground keeps the field seamless.
-          if (grid || building) color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
+          color = fit?.fit === "blocked" ? "#b4473f" : "#f2a541";
           const at: [number, number, number] = [x, top + (building || isKiln ? 1.7 : 1.1), z];
           if (fit && buildKind && !building) {
             hoverInfo.label = { at, title: BUILDINGS[buildKind].name, fit: fit.fit, note: fit.note };
@@ -614,7 +614,7 @@ function City() {
           <group key={key} position={[x, y, z]}>
             <mesh
               geometry={hexGeo}
-              position={[0, SLAB_HALF - column / 2, 0]}
+              position={[0, SLAB_HALF - column / 2 + (grid ? 0 : 0.03), 0]}
               scale={[1, column, 1]}
               rotation={[0, Math.PI / 6, 0]}
               receiveShadow
@@ -636,8 +636,8 @@ function City() {
                 select(building ? building.id : null);
               }}
             >
-              {/* Hidden (but still tappable) under the snowfield outside build mode. */}
-              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid} />
+              {/* Hidden (but still tappable) under the snowfield, except the tile a build would land on. */}
+              <meshStandardMaterial color={color} roughness={0.92} metalness={0.02} visible={grid || (Boolean(buildKind) && hovered)} />
             </mesh>
             {!building && tile.deposit !== "none" && <DepositTile deposit={tile.deposit} fill={depositFill(tile)} q={tile.q} r={tile.r} />}
             {building && (

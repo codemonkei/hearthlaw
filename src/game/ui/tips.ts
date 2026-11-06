@@ -48,7 +48,7 @@ export const TIPS: Tip[] = [
   {
     id: "welcome",
     title: "Keep everyone under a roof",
-    text: "The amber ring is the Kiln's warmth. Canvas Tents inside it are the cheapest shelter. Pick a card below, then tap a glowing tile.",
+    text: "The amber ring is the Kiln's warmth. Canvas Tents inside it are the cheapest shelter. Pick a card below, then tap a spot on the snow.",
     when: () => true,
   },
   {
