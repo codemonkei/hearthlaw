@@ -2,7 +2,8 @@
  * Townsfolk on foot: small hooded figures who trudge from door to door carrying a torch or a
  * lamp, leaving a trail of footprints that slowly fill back in with snow. Purely decoration —
  * the sim never reads them. How many are out follows the living population; they stand still
- * while the watch is paused.
+ * while the watch is paused. Lights come out only once the sky darkens. From 22:30 everyone
+ * heads home, by midnight the streets are empty, and they step out again from 06:00.
  */
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
@@ -12,6 +13,13 @@ import { livingCount } from "@/game/sim/engine";
 import { HEX_SIZE, hexToWorld } from "@/game/sim/hex";
 import type { SimState } from "@/game/sim/types";
 import { makeHeightAt } from "@/game/scene/terrain";
+import { weather } from "@/game/scene/Atmosphere";
+import { BUILDINGS } from "@/game/sim/content";
+
+/** Hours of the night shift: home from BEDTIME, indoors by midnight, out again at WAKE. */
+const BEDTIME = 22.5;
+const WAKE = 6;
+const POINT_LIGHT = 1.1;
 
 const MAX_WALKERS = 14;
 const PRINTS = 900;
@@ -36,6 +44,14 @@ interface Walker {
   stepAcc: number;
   left: boolean;
   bob: number;
+  /** Indoors for the night: hidden, not walking. */
+  asleep: boolean;
+  /** Heading home to sleep; vanishes on reaching the door. */
+  homeward: boolean;
+  /** Minutes after WAKE this one gets up, so the town wakes gradually. */
+  wakeDelay: number;
+  /** Daylight below which this one lights up, so lamps come on one by one at dusk. */
+  lightAt: number;
 }
 
 /** The point in front of a tile that faces another point: where someone steps out of a door. */
@@ -90,8 +106,8 @@ function Figure({ coat, torch }: { coat: string; torch: boolean }) {
         <circleGeometry args={[0.022, 8]} />
         <meshStandardMaterial color="#2a1f1a" roughness={1} />
       </mesh>
-      {/* The arm out to the side, carrying the light ahead and a little up. */}
-      <group position={[0.055, 0.12, 0.03]}>
+      {/* The arm out to the side, carrying the light ahead and a little up. Hidden by day. */}
+      <group name="light" position={[0.055, 0.12, 0.03]}>
         {torch ? (
           <>
             <mesh position={[0, 0.04, 0]} raycast={noHit}>
@@ -158,12 +174,23 @@ export function Walkers({ sim }: { sim: SimState }) {
     }
     return out;
   }, [sim, sim.buildings.length]);
+  // Where people sleep: housing if there is any, otherwise any building.
+  const homes = useMemo(() => {
+    const out: [number, number][] = [];
+    for (const b of sim.buildings) {
+      if (BUILDINGS[b.kind].housing <= 0) continue;
+      const [x, , z] = hexToWorld(b.q, b.r, sim.terrain);
+      out.push([x, z]);
+    }
+    return out.length > 0 ? out : spots.slice(1);
+  }, [sim, sim.buildings.length, spots]);
 
   const pickTrip = (w: Walker) => {
     const here: [number, number] = [w.x, w.z];
-    let target = spots[Math.floor(Math.random() * spots.length)];
+    const pool = w.homeward && homes.length > 0 ? homes : spots;
+    let target = pool[Math.floor(Math.random() * pool.length)];
     for (let tries = 0; tries < 4 && Math.hypot(target[0] - w.x, target[1] - w.z) < HEX_SIZE * 1.2; tries++) {
-      target = spots[Math.floor(Math.random() * spots.length)];
+      target = pool[Math.floor(Math.random() * pool.length)];
     }
     const reach = target[0] === 0 && target[1] === 0 ? HEX_SIZE * 0.85 : HEX_SIZE * 0.5;
     const end = doorstep(target, here, reach);
@@ -186,6 +213,10 @@ export function Walkers({ sim }: { sim: SimState }) {
         stepAcc: Math.random() * STRIDE,
         left: Math.random() < 0.5,
         bob: Math.random() * 10,
+        asleep: false,
+        homeward: false,
+        wakeDelay: Math.random() * 45,
+        lightAt: 0.3 + Math.random() * 0.25,
       };
       walkers.current.push(w);
     }
@@ -215,6 +246,10 @@ export function Walkers({ sim }: { sim: SimState }) {
     const paused = !s || s.speed === 0 || state.panel === "settings" || Boolean(s.outcome);
     const pace = paused ? 0 : Math.sqrt(s!.speed);
     clock.current += dt;
+    const minuteOfDay = s ? s.minute % 1440 : 12 * 60;
+    const hour = minuteOfDay / 60;
+    const night = hour < WAKE;
+    const bedtime = hour >= BEDTIME;
 
     const drop = (x: number, z: number, heading: number, side: number) => {
       const i = nextPrint.current;
@@ -234,8 +269,30 @@ export function Walkers({ sim }: { sim: SimState }) {
       const g = groups.current[i];
       if (!g) continue;
       const active = i < count;
-      g.visible = active;
-      if (!active) continue;
+
+      // The night: everyone goes in at midnight, and gets up a little after WAKE.
+      if (night) {
+        w.asleep = true;
+        w.homeward = false;
+        w.path = [];
+      } else if (w.asleep && minuteOfDay >= WAKE * 60 + w.wakeDelay) {
+        // Step out of a house door, facing out into the street.
+        const home = homes[Math.floor(Math.random() * homes.length)] ?? spots[0];
+        const ang = Math.random() * Math.PI * 2;
+        w.x = home[0] + Math.cos(ang) * HEX_SIZE * 0.5;
+        w.z = home[1] + Math.sin(ang) * HEX_SIZE * 0.5;
+        w.heading = Math.atan2(Math.cos(ang), Math.sin(ang));
+        w.asleep = false;
+        w.wait = Math.random() * 2;
+      }
+      if (bedtime && !w.homeward && !w.asleep) {
+        w.homeward = true;
+        w.path = [];
+        w.wait = Math.min(w.wait, Math.random() * 2);
+      }
+
+      g.visible = active && !w.asleep;
+      if (!g.visible) continue;
 
       let moving = false;
       if (pace > 0) {
@@ -253,8 +310,13 @@ export function Walkers({ sim }: { sim: SimState }) {
             w.x = tx;
             w.z = tz;
             w.path.shift();
-            // A pause on arrival: a word at the door, hands to the fire.
-            if (w.path.length === 0) w.wait = 1 + Math.random() * 4;
+            // A pause on arrival: a word at the door, hands to the fire. Or in, for the night.
+            if (w.path.length === 0) {
+              if (w.homeward) {
+                w.asleep = true;
+                w.homeward = false;
+              } else w.wait = 1 + Math.random() * 4;
+            }
           } else {
             w.x += (dx / d) * step;
             w.z += (dz / d) * step;
@@ -277,8 +339,14 @@ export function Walkers({ sim }: { sim: SimState }) {
       const bounce = moving ? Math.abs(Math.sin(w.bob)) * 0.02 : 0;
       g.position.set(w.x, heightAt(w.x, w.z) + bounce, w.z);
       g.rotation.set(0, w.heading, moving ? Math.sin(w.bob) * 0.06 : 0);
+      // Lights only once the sky has darkened enough for this one to want one.
+      const dark = weather.daylight < w.lightAt;
+      const carried = g.getObjectByName("light");
+      if (carried) carried.visible = dark;
+      const lamp = g.getObjectByName("lamp") as THREE.PointLight | undefined;
+      if (lamp) lamp.intensity = dark ? POINT_LIGHT : 0;
       const flame = g.getObjectByName("flame");
-      if (flame) {
+      if (flame && dark) {
         const f = 1 + Math.sin(clock.current * 17 + i * 3.1) * 0.12 + Math.sin(clock.current * 29 + i) * 0.08;
         flame.scale.set(1, f, 1);
       }
@@ -313,7 +381,8 @@ export function Walkers({ sim }: { sim: SimState }) {
           <group scale={FIGURE_SCALE}>
             <Figure coat={look.coat} torch={look.torch} />
           </group>
-          {i < lit && <pointLight position={[0.1, 0.42, 0.06]} color={look.torch ? "#ff9a3c" : "#ffd27a"} intensity={1.1} distance={1.6} decay={2} />}
+          {/* Kept mounted and dimmed to 0 by day: switching lights on and off would recompile every shader. */}
+          {i < lit && <pointLight name="lamp" position={[0.1, 0.42, 0.06]} color={look.torch ? "#ff9a3c" : "#ffd27a"} intensity={0} distance={1.6} decay={2} />}
         </group>
       ))}
     </group>
