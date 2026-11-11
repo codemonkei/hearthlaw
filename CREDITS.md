@@ -8,3 +8,7 @@
   `assetpacks/` (not committed). Colours are replaced at runtime with Hearthlaw's palette.
 
 Everything else in the scene is drawn in code.
+
+## Fonts
+
+- **Cormorant Garamond** and **Inter**, served by Google Fonts — SIL Open Font License 1.1.
